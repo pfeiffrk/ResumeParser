@@ -873,16 +873,15 @@ function parseIndeedPaste() {
         const line = lines[i];
         const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
 
-        // Detect candidate start: name repeated on two consecutive lines
-        // OR a line that is ALL CAPS with 2+ words followed by a location pattern (City, ST)
-        const isAllCaps = line.length > 2 && /^[A-Z\s.\-']+$/.test(line) && line.includes(' ');
-        const isDuplicate = nextLine.toUpperCase() === line.toUpperCase();
-        const isFollowedByLocation = /^[A-Za-z\s]+,\s*[A-Z]{2}$/i.test(nextLine);
+        // Detect candidate start: name repeated on two consecutive lines (any case)
+        // A name is 2+ words, all letters/spaces/hyphens/apostrophes
+        const isNameLike = line.length > 2 && /^[A-Za-z\s.\-']+$/.test(line) && line.includes(' ');
+        const isDuplicate = nextLine.trim().toLowerCase() === line.toLowerCase();
 
-        if (isAllCaps && (isDuplicate || isFollowedByLocation)) {
+        if (isNameLike && isDuplicate) {
             if (current) blocks.push(current);
             current = { name: toTitleCase(line), lines: [] };
-            if (isDuplicate) i++; // skip duplicate name line
+            i++; // skip duplicate name line
             continue;
         }
         if (current) current.lines.push(line);
