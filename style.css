@@ -253,13 +253,23 @@ body {
     box-shadow: var(--shadow-lg); display: flex; flex-direction: column; overflow: hidden;
 }
 .pdf-viewer-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px;
 }
-.pdf-viewer-header button {
-    background: none; border: none; font-size: 22px; cursor: pointer; color: #999; padding: 0 4px;
+.viewer-info { flex: 1; display: flex; align-items: center; gap: 16px; }
+#viewerName { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-controls { display: flex; gap: 12px; align-items: center; }
+.viewer-controls label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-light); white-space: nowrap; }
+.viewer-controls select { padding: 3px 6px; font-size: 12px; border: 1px solid var(--border); border-radius: 3px; font-family: inherit; }
+.viewer-nav-btn {
+    background: var(--primary); color: #fff; border: none; border-radius: 4px;
+    padding: 6px 14px; font-size: 16px; cursor: pointer; flex-shrink: 0;
 }
-.pdf-viewer-header button:hover { color: var(--text); }
+.viewer-nav-btn:hover { background: var(--primary-hover); }
+.viewer-close-btn {
+    background: none; border: none; font-size: 22px; cursor: pointer; color: #999; padding: 0 6px; flex-shrink: 0;
+}
+.viewer-close-btn:hover { color: var(--text); }
 #pdfViewerFrame { flex: 1; border: none; width: 100%; }
 
 /* ── Responsive ── */

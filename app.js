@@ -626,21 +626,59 @@ function startColResize(e, handle) {
     document.addEventListener('mouseup', onUp);
 }
 
+let viewerCurrentId = null;
+
+function getViewableResults() {
+    return getSortedResults().filter(r => !!pdfBlobUrls[r.id] || !!r.pdfUrl);
+}
+
 function viewResume(id) {
+    viewerCurrentId = id;
+    loadViewer(id);
+    document.getElementById('pdfViewerOverlay').classList.add('show');
+}
+
+function loadViewer(id) {
+    const r = results.find(x => x.id === id);
+    if (!r) return;
+    viewerCurrentId = id;
+
     let url = pdfBlobUrls[id];
-    if (!url) {
-        const r = results.find(x => x.id === id);
-        if (r && r.pdfUrl) url = r.pdfUrl;
-        else { alert('Resume file no longer available. Re-upload to view.'); return; }
-    }
-    const overlay = document.getElementById('pdfViewerOverlay');
+    if (!url && r.pdfUrl) url = r.pdfUrl;
+    if (!url) { alert('Resume file no longer available.'); return; }
+
     document.getElementById('pdfViewerFrame').src = url;
-    overlay.classList.add('show');
+    document.getElementById('viewerName').textContent = r.name || r.fileName;
+
+    // Populate review status dropdown
+    const revSel = document.getElementById('viewerReviewStatus');
+    revSel.innerHTML = statusOptions.map(s => `<option value="${escapeHtml(s)}"${(r.status || statusOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
+
+    // Populate comms status dropdown
+    const commsSel = document.getElementById('viewerCommsStatus');
+    commsSel.innerHTML = commsOptions.map(s => `<option value="${escapeHtml(s)}"${(r.commsStatus || commsOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
+}
+
+function viewerUpdateStatus(field, value) {
+    if (!viewerCurrentId) return;
+    const r = results.find(x => x.id === viewerCurrentId);
+    if (r) { r[field] = value; saveToFirebase(); renderTable(); }
+}
+
+function viewerNav(dir) {
+    const viewable = getViewableResults();
+    if (viewable.length === 0) return;
+    const idx = viewable.findIndex(r => r.id === viewerCurrentId);
+    let newIdx = idx + dir;
+    if (newIdx < 0) newIdx = viewable.length - 1;
+    if (newIdx >= viewable.length) newIdx = 0;
+    loadViewer(viewable[newIdx].id);
 }
 
 function closePdfViewer() {
     document.getElementById('pdfViewerOverlay').classList.remove('show');
     document.getElementById('pdfViewerFrame').src = '';
+    viewerCurrentId = null;
 }
 
 function buildSortHeader(label, field) {

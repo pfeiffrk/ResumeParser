@@ -94,8 +94,16 @@
 <div id="pdfViewerOverlay" class="modal-overlay" onclick="if(event.target===this)closePdfViewer()">
     <div class="pdf-viewer-box">
         <div class="pdf-viewer-header">
-            <span>Resume</span>
-            <button onclick="closePdfViewer()">&times;</button>
+            <button class="viewer-nav-btn" onclick="viewerNav(-1)" title="Previous">&larr;</button>
+            <div class="viewer-info">
+                <span id="viewerName"></span>
+                <div class="viewer-controls">
+                    <label>Review: <select id="viewerReviewStatus" onchange="viewerUpdateStatus('status', this.value)"></select></label>
+                    <label>Comms: <select id="viewerCommsStatus" onchange="viewerUpdateStatus('commsStatus', this.value)"></select></label>
+                </div>
+            </div>
+            <button class="viewer-nav-btn" onclick="viewerNav(1)" title="Next">&rarr;</button>
+            <button class="viewer-close-btn" onclick="closePdfViewer()">&times;</button>
         </div>
         <iframe id="pdfViewerFrame" src=""></iframe>
     </div>
