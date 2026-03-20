@@ -421,8 +421,8 @@ function renderTable() {
 
     let html = '<div class="results-table-wrapper"><table class="results-table">';
     html += '<thead><tr>';
-    html += buildSortHeader('File', 'fileName');
     html += buildSortHeader('Name', 'name');
+    html += buildSortHeader('File', 'fileName');
     html += buildSortHeader('Email', 'email');
     html += buildSortHeader('Phone', 'phone');
     html += buildSortHeader('Education', 'education');
@@ -437,8 +437,8 @@ function renderTable() {
         sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
             html += `<tr data-row="${idx}">`;
-            html += `<td><div class="cell-inner cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.name)}</div></td>`;
+            html += `<td><div class="cell-inner cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</div></td>`;
             html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.phone)}</div></td>`;
             html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.education)}</div></td>`;
