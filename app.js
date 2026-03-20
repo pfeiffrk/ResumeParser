@@ -377,7 +377,7 @@ ${text.substring(0, 15000)}`;
 // ── File Upload ──
 document.getElementById('fileInput').addEventListener('change', function(e) {
     uploadedFiles = Array.from(e.target.files);
-    renderFileList();
+    if (uploadedFiles.length > 0) parseAll();
 });
 
 function renderFileList() {

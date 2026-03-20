@@ -24,14 +24,13 @@
         <span id="appTitle">Resume Parser</span>
         <div class="toolbar-spacer"></div>
         <label class="toolbar-btn-file">
-            Upload PDFs
+            Upload &amp; Parse
             <input type="file" id="fileInput" accept=".pdf" multiple style="display:none">
         </label>
         <div id="parseModeToggle">
             <button id="btnBasicMode" class="active" onclick="setParseMode('basic')">Basic</button>
             <button id="btnAiMode" onclick="setParseMode('ai')">AI (Claude)</button>
         </div>
-        <button id="btnParse" onclick="parseAll()">Parse Resumes</button>
         <button onclick="clearResults()">Clear</button>
         <button onclick="exportCSV()">Export CSV</button>
         <button onclick="openSettingsModal()">Settings</button>
