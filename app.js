@@ -497,14 +497,13 @@ function renderTable() {
     html += buildSortHeader('Email', 'email');
     html += buildSortHeader('Phone', 'phone');
     html += buildSortHeader('Degrees', 'degrees');
-    html += buildSortHeader('Education', 'education');
     html += buildSortHeader('Clearance', 'clearance');
     html += buildSortHeader('Certifications', 'certifications');
     html += '<th>Mode</th><th></th>';
     html += '</tr></thead><tbody>';
 
     if (sorted.length === 0) {
-        html += '<tr class="empty-row"><td colspan="11">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
+        html += '<tr class="empty-row"><td colspan="10">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
     } else {
         sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
@@ -516,13 +515,12 @@ function renderTable() {
             html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.phone)}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.degrees)}</div></td>`;
-            html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.education)}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.clearance)}</div></td>`;
             html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.certifications)}</div></td>`;
             html += `<td><div class="cell-inner"><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></div></td>`;
             html += `<td><div class="cell-inner"><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></div></td>`;
             html += '</tr>';
-            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="11"><div class="row-resizer"></div></td></tr>`;
+            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="10"><div class="row-resizer"></div></td></tr>`;
         });
     }
 
@@ -622,11 +620,11 @@ function setParseMode(mode) {
 // ── CSV Export ──
 function exportCSV() {
     if (results.length === 0) { alert('No results to export.'); return; }
-    const headers = ['Name', 'File', 'Email', 'Phone', 'Degrees', 'Education', 'Security Clearance', 'Certifications', 'Parse Mode'];
+    const headers = ['Name', 'File', 'Email', 'Phone', 'Degrees', 'Security Clearance', 'Certifications', 'Parse Mode'];
     const rows = [headers];
     results.forEach(r => {
         rows.push([r.name || '', r.fileName || '', r.email || '', r.phone || '',
-            r.degrees || '', r.education || '', r.clearance || '', r.certifications || '', r.parseMode || '']);
+            r.degrees || '', r.clearance || '', r.certifications || '', r.parseMode || '']);
     });
     let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
