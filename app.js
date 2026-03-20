@@ -864,19 +864,25 @@ function parseIndeedPaste() {
     const text = document.getElementById('indeedPasteText').value.trim();
     if (!text) { alert('Paste candidate data first.'); return; }
 
-    // Split into candidate blocks — each starts with a name in ALL CAPS repeated on two lines
+    // Split into candidate blocks
     const blocks = [];
-    const lines = text.split('\n').map(l => l.replace(/&nbsp;/g, '').trim());
+    const lines = text.split('\n').map(l => l.replace(/&nbsp;/g, '').replace(/\u00a0/g, ' ').trim()).filter(l => l.length > 0);
     let current = null;
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        // Detect candidate start: a line that is mostly uppercase letters and spaces,
-        // followed by same name on next line (Indeed duplicates the name)
-        if (line.length > 2 && /^[A-Z\s.\-']+$/.test(line) && lines[i + 1] && lines[i + 1].toUpperCase() === line.toUpperCase()) {
+        const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+
+        // Detect candidate start: name repeated on two consecutive lines
+        // OR a line that is ALL CAPS with 2+ words followed by a location pattern (City, ST)
+        const isAllCaps = line.length > 2 && /^[A-Z\s.\-']+$/.test(line) && line.includes(' ');
+        const isDuplicate = nextLine.toUpperCase() === line.toUpperCase();
+        const isFollowedByLocation = /^[A-Za-z\s]+,\s*[A-Z]{2}$/i.test(nextLine);
+
+        if (isAllCaps && (isDuplicate || isFollowedByLocation)) {
             if (current) blocks.push(current);
             current = { name: toTitleCase(line), lines: [] };
-            i++; // skip the duplicate name line
+            if (isDuplicate) i++; // skip duplicate name line
             continue;
         }
         if (current) current.lines.push(line);
@@ -884,8 +890,15 @@ function parseIndeedPaste() {
     if (current) blocks.push(current);
 
     if (blocks.length === 0) {
-        alert('Could not find any candidates in the pasted text.');
-        return;
+        // Fallback: try treating the whole text as one candidate
+        // Look for any name-like line at the top
+        const firstNameLine = lines.find(l => l.length > 2 && l.includes(' ') && /^[A-Za-z\s.\-']+$/.test(l));
+        if (firstNameLine) {
+            blocks.push({ name: toTitleCase(firstNameLine), lines: lines.filter(l => l !== firstNameLine) });
+        } else {
+            alert('Could not find any candidates. Make sure you paste the full Indeed candidate data.');
+            return;
+        }
     }
 
     const rejectDupes = new Set(indeedResults.map(r => r.name.toLowerCase()));
