@@ -74,6 +74,17 @@
     </div>
 </div>
 
+<!-- PDF Viewer Modal -->
+<div id="pdfViewerOverlay" class="modal-overlay" onclick="if(event.target===this)closePdfViewer()">
+    <div class="pdf-viewer-box">
+        <div class="pdf-viewer-header">
+            <span>Resume</span>
+            <button onclick="closePdfViewer()">&times;</button>
+        </div>
+        <iframe id="pdfViewerFrame" src=""></iframe>
+    </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

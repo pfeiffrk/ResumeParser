@@ -17,6 +17,7 @@ let firebaseUser = null;
 let dataListener = null;
 let sortField = 'name';
 let sortDir = 'asc';
+const pdfBlobUrls = {}; // id -> blob URL for viewing PDFs
 
 // ── PDF.js Setup ──
 if (typeof pdfjsLib !== 'undefined') {
@@ -396,11 +397,14 @@ async function parseAll() {
         updateProgress(i, total, file.name);
 
         try {
+            const blobUrl = URL.createObjectURL(file);
             const text = await extractTextFromPDF(file);
 
             if (text.trim().length < 50) {
+                const id = generateId();
+                pdfBlobUrls[id] = blobUrl;
                 results.push({
-                    id: generateId(), fileName: file.name,
+                    id, fileName: file.name,
                     name: 'WARNING: PDF may be scanned/image-only',
                     email: '', phone: '', education: '', clearance: '', certifications: '',
                     parseMode: parseMode + '-error', parsedAt: Date.now()
@@ -413,6 +417,7 @@ async function parseAll() {
                 } else {
                     result = parseBasic(text, file.name);
                 }
+                pdfBlobUrls[result.id] = blobUrl;
                 results.push(result);
             }
         } catch (e) {
@@ -459,6 +464,7 @@ function renderTable() {
 
     let html = '<div class="results-table-wrapper"><table class="results-table">';
     html += '<thead><tr>';
+    html += '<th></th>';
     html += buildSortHeader('Name', 'name');
     html += buildSortHeader('File', 'fileName');
     html += buildSortHeader('Email', 'email');
@@ -470,11 +476,13 @@ function renderTable() {
     html += '</tr></thead><tbody>';
 
     if (sorted.length === 0) {
-        html += '<tr class="empty-row"><td colspan="9">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
+        html += '<tr class="empty-row"><td colspan="10">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
     } else {
         sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
             html += `<tr data-row="${idx}">`;
+            const hasBlob = !!pdfBlobUrls[r.id];
+            html += `<td><div class="cell-inner">${hasBlob ? `<button class="btn-see-resume" onclick="viewResume('${r.id}')">See Resume</button>` : ''}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.name)}</div></td>`;
             html += `<td><div class="cell-inner cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</div></td>`;
             html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
@@ -485,7 +493,7 @@ function renderTable() {
             html += `<td><div class="cell-inner"><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></div></td>`;
             html += `<td><div class="cell-inner"><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></div></td>`;
             html += '</tr>';
-            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="9"><div class="row-resizer"></div></td></tr>`;
+            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="10"><div class="row-resizer"></div></td></tr>`;
         });
     }
 
@@ -520,6 +528,19 @@ function initRowResizers() {
             document.addEventListener('mouseup', onUp);
         });
     });
+}
+
+function viewResume(id) {
+    const url = pdfBlobUrls[id];
+    if (!url) { alert('Resume file no longer available. Re-upload to view.'); return; }
+    const overlay = document.getElementById('pdfViewerOverlay');
+    document.getElementById('pdfViewerFrame').src = url;
+    overlay.classList.add('show');
+}
+
+function closePdfViewer() {
+    document.getElementById('pdfViewerOverlay').classList.remove('show');
+    document.getElementById('pdfViewerFrame').src = '';
 }
 
 function buildSortHeader(label, field) {
