@@ -863,7 +863,6 @@ const indeedPdfBlobUrls = {};
 function parseIndeedPaste() {
     const text = document.getElementById('indeedPasteText').value.trim();
     if (!text) { alert('Paste candidate data first.'); return; }
-    console.log('parseIndeedPaste called, text length:', text.length, 'first 200 chars:', text.substring(0, 200));
 
     // Split into candidate blocks
     const blocks = [];
