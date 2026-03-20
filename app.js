@@ -860,15 +860,18 @@ function switchTab(tab) {
 let indeedResults = [];
 const indeedPdfBlobUrls = {};
 
-document.getElementById('indeedFileInput').addEventListener('change', function(e) {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-        parseIndeed(files).catch(err => {
-            console.error('Indeed parse error:', err);
-            alert('Error: ' + err.message);
-        });
-    }
-});
+const indeedFileEl = document.getElementById('indeedFileInput');
+if (indeedFileEl) {
+    indeedFileEl.addEventListener('change', function(e) {
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+            parseIndeed(files).catch(err => {
+                console.error('Indeed parse error:', err);
+                alert('Error: ' + err.message);
+            });
+        }
+    });
+}
 
 async function parseIndeed(files) {
     const rejectDupes = document.getElementById('cbIndeedRejectDupes').checked;
