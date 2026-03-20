@@ -65,9 +65,12 @@
 <div id="settingsModalOverlay" class="modal-overlay" onclick="if(event.target===this)closeSettingsModal()">
     <div class="modal-box settings-modal">
         <h3>Settings</h3>
-        <label for="statusOptionsInput">Status Dropdown Options</label>
-        <input type="text" id="statusOptionsInput" placeholder="New, Reviewing, Interview, Hired, Rejected">
-        <p class="settings-note">Comma-separated list of status values for the dropdown.</p>
+        <label>Review Status Options</label>
+        <div id="statusOptionsList"></div>
+        <div class="status-add-row">
+            <input type="text" id="newStatusInput" placeholder="Add new status...">
+            <button class="btn-primary btn-sm" onclick="addStatusOption()">Add</button>
+        </div>
         <label for="apiKeyInput">Claude API Key</label>
         <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
         <p class="settings-note">Your API key is stored locally in your browser only. It is never sent to Firebase or any server other than the Anthropic API.</p>

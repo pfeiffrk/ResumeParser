@@ -516,7 +516,7 @@ function renderTable() {
     let html = '<div class="results-table-wrapper"><table class="results-table">';
     html += '<thead><tr>';
     html += '<th></th>';
-    html += buildSortHeader('Status', 'status');
+    html += buildSortHeader('Review Status', 'status');
     html += buildSortHeader('Name', 'name');
     html += buildSortHeader('Email', 'email');
     html += buildSortHeader('Phone', 'phone');
@@ -675,7 +675,7 @@ function setParseMode(mode) {
 // ── CSV Export ──
 function exportCSV() {
     if (results.length === 0) { alert('No results to export.'); return; }
-    const headers = ['Status', 'Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Security Clearance', 'Certifications', 'Parse Mode'];
+    const headers = ['Review Status', 'Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Security Clearance', 'Certifications', 'Parse Mode'];
     const rows = [headers];
     results.forEach(r => {
         rows.push([r.status || statusOptions[0], r.name || '', r.email || '', r.phone || '',
@@ -692,27 +692,80 @@ function exportCSV() {
 // ── Settings Modal ──
 function openSettingsModal() {
     document.getElementById('settingsModalOverlay').classList.add('show');
-    document.getElementById('statusOptionsInput').value = statusOptions.join(', ');
     document.getElementById('apiKeyInput').value = localStorage.getItem('resumeparser_apikey') || '';
+    renderStatusOptionsList();
 }
 
 function closeSettingsModal() {
     document.getElementById('settingsModalOverlay').classList.remove('show');
 }
 
+function renderStatusOptionsList() {
+    const list = document.getElementById('statusOptionsList');
+    list.innerHTML = statusOptions.map((opt, i) => `
+        <div class="status-option-item" draggable="true" data-idx="${i}"
+             ondragstart="statusDragStart(event, ${i})" ondragover="statusDragOver(event)" ondrop="statusDrop(event, ${i})" ondragend="statusDragEnd(event)">
+            <span class="status-drag-handle">&#9776;</span>
+            <input type="text" value="${escapeHtml(opt)}" onchange="renameStatusOption(${i}, this.value)">
+            <button class="btn-icon" onclick="removeStatusOption(${i})" title="Remove">&times;</button>
+        </div>
+    `).join('');
+}
+
+let statusDragIdx = null;
+function statusDragStart(e, idx) { statusDragIdx = idx; e.dataTransfer.effectAllowed = 'move'; e.target.style.opacity = '0.4'; }
+function statusDragOver(e) { e.preventDefault(); }
+function statusDrop(e, targetIdx) {
+    e.preventDefault();
+    if (statusDragIdx === null || statusDragIdx === targetIdx) return;
+    const [moved] = statusOptions.splice(statusDragIdx, 1);
+    statusOptions.splice(targetIdx, 0, moved);
+    statusDragIdx = null;
+    saveStatusOptions();
+    renderStatusOptionsList();
+}
+function statusDragEnd(e) { e.target.style.opacity = ''; statusDragIdx = null; }
+
+function addStatusOption() {
+    const input = document.getElementById('newStatusInput');
+    const val = input.value.trim();
+    if (!val) return;
+    if (statusOptions.some(s => s.toLowerCase() === val.toLowerCase())) { input.value = ''; return; }
+    statusOptions.push(val);
+    input.value = '';
+    saveStatusOptions();
+    renderStatusOptionsList();
+}
+
+function removeStatusOption(idx) {
+    if (statusOptions.length <= 1) return;
+    statusOptions.splice(idx, 1);
+    saveStatusOptions();
+    renderStatusOptionsList();
+}
+
+function renameStatusOption(idx, val) {
+    val = val.trim();
+    if (!val) return;
+    const old = statusOptions[idx];
+    statusOptions[idx] = val;
+    // Update any results that had the old value
+    results.forEach(r => { if (r.status === old) r.status = val; });
+    saveStatusOptions();
+    saveToFirebase();
+    renderTable();
+}
+
+function saveStatusOptions() {
+    localStorage.setItem('resumeparser_statusoptions', JSON.stringify(statusOptions));
+    renderTable();
+}
+
 function saveSettings() {
     const key = document.getElementById('apiKeyInput').value.trim();
     if (key) localStorage.setItem('resumeparser_apikey', key);
     else localStorage.removeItem('resumeparser_apikey');
-
-    const opts = document.getElementById('statusOptionsInput').value
-        .split(',').map(s => s.trim()).filter(s => s.length > 0);
-    if (opts.length > 0) statusOptions = opts;
-    else statusOptions = [...DEFAULT_STATUS_OPTIONS];
-    localStorage.setItem('resumeparser_statusoptions', JSON.stringify(statusOptions));
-
     closeSettingsModal();
-    renderTable();
 }
 
 // ── Init ──

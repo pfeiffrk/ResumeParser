@@ -204,6 +204,22 @@ body {
 .modal-box input:focus { outline: none; border-color: var(--primary); }
 .settings-modal { width: 440px; }
 .settings-note { font-size: 11px; color: var(--text-light); margin-top: 8px; line-height: 1.4; }
+
+/* ── Status Options Editor ── */
+#statusOptionsList { max-height: 200px; overflow-y: auto; margin-bottom: 8px; }
+.status-option-item {
+    display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid #eee;
+}
+.status-option-item input[type="text"] {
+    flex: 1; padding: 4px 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 3px; font-family: inherit;
+}
+.status-option-item input:focus { outline: none; border-color: var(--primary); }
+.status-drag-handle { cursor: grab; color: #bbb; font-size: 14px; padding: 0 2px; }
+.status-drag-handle:active { cursor: grabbing; }
+.status-add-row { display: flex; gap: 6px; margin-bottom: 12px; }
+.status-add-row input { flex: 1; padding: 5px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
+.status-add-row input:focus { outline: none; border-color: var(--primary); }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
 .modal-actions { display: flex; align-items: center; justify-content: flex-end; margin-top: 20px; gap: 8px; }
 .modal-actions-right { display: flex; gap: 8px; }
 .btn-primary {
