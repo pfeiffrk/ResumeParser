@@ -452,12 +452,21 @@ async function parseAll() {
         try {
             const blobUrl = URL.createObjectURL(file);
             const text = await extractTextFromPDF(file);
+            // Upload PDF to Firebase Storage
+            let pdfUrl = '';
+            try {
+                const storageRef = firebase.storage().ref(`users/${firebaseUser.uid}/resumes/${file.name}`);
+                await storageRef.put(file);
+                pdfUrl = await storageRef.getDownloadURL();
+            } catch (uploadErr) {
+                console.warn('Storage upload failed:', uploadErr);
+            }
 
             if (text.trim().length < 50) {
                 const id = generateId();
                 pdfBlobUrls[id] = blobUrl;
                 results.push({
-                    id, fileName: file.name,
+                    id, fileName: file.name, pdfUrl,
                     name: 'WARNING: PDF may be scanned/image-only',
                     email: '', phone: '', education: '', clearance: '', certifications: '',
                     parseMode: parseMode + '-error', parsedAt: Date.now()
@@ -470,6 +479,7 @@ async function parseAll() {
                 } else {
                     result = parseBasic(text, file.name);
                 }
+                result.pdfUrl = pdfUrl;
                 pdfBlobUrls[result.id] = blobUrl;
                 results.push(result);
             }
@@ -536,8 +546,8 @@ function renderTable() {
         sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
             html += `<tr data-row="${idx}">`;
-            const hasBlob = !!pdfBlobUrls[r.id];
-            html += `<td><div class="cell-inner">${hasBlob ? `<button class="btn-see-resume" onclick="viewResume('${r.id}')">See Resume</button>` : ''}</div></td>`;
+            const hasPdf = !!pdfBlobUrls[r.id] || !!r.pdfUrl;
+            html += `<td><div class="cell-inner">${hasPdf ? `<button class="btn-see-resume" onclick="viewResume('${r.id}')">See Resume</button>` : ''}</div></td>`;
             const statusOpts = statusOptions.map(s => `<option value="${escapeHtml(s)}"${(r.status || statusOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
             html += `<td><div class="cell-inner"><select class="status-select" onchange="updateStatus('${r.id}', this.value)">${statusOpts}</select></div></td>`;
             const commsOpts = commsOptions.map(s => `<option value="${escapeHtml(s)}"${(r.commsStatus || commsOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
@@ -613,8 +623,12 @@ function startColResize(e, handle) {
 }
 
 function viewResume(id) {
-    const url = pdfBlobUrls[id];
-    if (!url) { alert('Resume file no longer available. Re-upload to view.'); return; }
+    let url = pdfBlobUrls[id];
+    if (!url) {
+        const r = results.find(x => x.id === id);
+        if (r && r.pdfUrl) url = r.pdfUrl;
+        else { alert('Resume file no longer available. Re-upload to view.'); return; }
+    }
     const overlay = document.getElementById('pdfViewerOverlay');
     document.getElementById('pdfViewerFrame').src = url;
     overlay.classList.add('show');
