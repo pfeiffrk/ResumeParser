@@ -159,8 +159,20 @@ async function extractTextFromPDF(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map(item => item.str).join(' ');
-        fullText += pageText + '\n';
+        // Group items by Y position to reconstruct lines
+        let lastY = null;
+        let line = '';
+        textContent.items.forEach(item => {
+            const y = Math.round(item.transform[5]);
+            if (lastY !== null && Math.abs(y - lastY) > 5) {
+                fullText += line.trim() + '\n';
+                line = '';
+            }
+            line += item.str + ' ';
+            lastY = y;
+        });
+        if (line.trim()) fullText += line.trim() + '\n';
+        fullText += '\n';
     }
     return fullText;
 }
@@ -185,15 +197,41 @@ function extractName(text) {
     // Strategy 1: Look for "Name:" label
     const labelMatch = text.match(/(?:name|full\s*name)\s*[:\-]\s*([^\n,]{2,40})/i);
     if (labelMatch) return labelMatch[1].trim();
-    // Strategy 2: First non-trivial line (most resumes start with the name)
+
+    // Strategy 2: Look for name near email (line before or same line)
     const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 1);
-    for (const line of lines) {
+    const emailIdx = lines.findIndex(l => /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/.test(l));
+
+    // Strategy 3: First few non-trivial lines (most resumes start with the name)
+    const skipWords = /^(resume|curriculum|vitae|cv|page|profile|summary|objective|experience|contact|address|phone|email|tel|www|http)/i;
+    const candidates = [];
+    for (let i = 0; i < Math.min(lines.length, 10); i++) {
+        const line = lines[i];
+        // Skip lines that look like email, phone, URL, or section headers
+        if (/@/.test(line) || /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(line)) continue;
+        if (/^https?:\/\//i.test(line) || /^www\./i.test(line)) continue;
+        if (/linkedin|github/i.test(line)) continue;
         const clean = line.replace(/[^a-zA-Z\s.\-']/g, '').trim();
-        if (clean.length >= 3 && clean.length <= 50 && clean.includes(' ')
-            && !/^(resume|curriculum|vitae|cv|page|profile|summary|objective|experience)/i.test(clean)) {
-            return clean;
+        if (clean.length < 3 || clean.length > 50) continue;
+        if (!clean.includes(' ')) continue;
+        if (skipWords.test(clean)) continue;
+        // Looks like a name: 2-4 words, mostly letters
+        const words = clean.split(/\s+/);
+        if (words.length >= 2 && words.length <= 5 && words.every(w => /^[A-Za-z.\-']+$/.test(w))) {
+            candidates.push({ text: clean, idx: i });
         }
     }
+
+    // Prefer candidate near the email line, or the first one
+    if (candidates.length > 0) {
+        if (emailIdx >= 0) {
+            const near = candidates.find(c => Math.abs(c.idx - emailIdx) <= 3);
+            if (near) return near.text;
+        }
+        return candidates[0].text;
+    }
+
+    // Strategy 4: Try extracting from filename (e.g. "John_Doe_Resume.pdf")
     return 'Not found';
 }
 
