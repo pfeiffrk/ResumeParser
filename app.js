@@ -863,6 +863,7 @@ const indeedPdfBlobUrls = {};
 function parseIndeedPaste() {
     const text = document.getElementById('indeedPasteText').value.trim();
     if (!text) { alert('Paste candidate data first.'); return; }
+    console.log('parseIndeedPaste called, text length:', text.length, 'first 200 chars:', text.substring(0, 200));
 
     // Split into candidate blocks
     const blocks = [];
@@ -967,64 +968,6 @@ function extractIndeedMeta(lines, prefix) {
         if (line.toLowerCase().startsWith(prefix.toLowerCase())) return line;
     }
     return '';
-}
-
-async function parseIndeed(files) {
-    const rejectDupes = document.getElementById('cbIndeedRejectDupes').checked;
-    let filesToParse = files;
-    if (rejectDupes) {
-        const existing = new Set(indeedResults.map(r => r.fileName));
-        const seen = new Set();
-        filesToParse = filesToParse.filter(f => {
-            if (existing.has(f.name) || seen.has(f.name)) return false;
-            seen.add(f.name);
-            return true;
-        });
-        if (filesToParse.length === 0) { alert('All selected files already parsed.'); return; }
-    }
-
-    for (const file of filesToParse) {
-        try {
-            const blobUrl = URL.createObjectURL(file);
-            const text = await extractTextFromPDF(file);
-            const result = {
-                id: generateId(),
-                fileName: file.name,
-                name: extractName(text),
-                email: extractEmail(text),
-                phone: extractPhone(text),
-                degrees: extractDegrees(text),
-                securityPlus: extractSecurityPlus(text),
-                clearance: extractClearance(text),
-                certifications: extractCertifications(text),
-                status: statusOptions[0],
-                commsStatus: commsOptions[0],
-                parsedAt: Date.now()
-            };
-            indeedPdfBlobUrls[result.id] = blobUrl;
-            indeedResults.push(result);
-
-            if (typeof firebase !== 'undefined' && firebase.storage) {
-                const rid = result.id;
-                firebase.storage().ref(`users/${firebaseUser.uid}/indeed/${file.name}`)
-                    .put(file).then(s => s.ref.getDownloadURL())
-                    .then(url => { const r = indeedResults.find(x => x.id === rid); if (r) { r.pdfUrl = url; saveIndeedToFirebase(); } })
-                    .catch(err => console.warn('Storage upload failed:', err));
-            }
-        } catch (e) {
-            indeedResults.push({
-                id: generateId(), fileName: file.name,
-                name: 'ERROR: ' + e.message,
-                email: '', phone: '', degrees: '', securityPlus: 'No',
-                clearance: '', certifications: '',
-                status: statusOptions[0], commsStatus: commsOptions[0],
-                parsedAt: Date.now()
-            });
-        }
-        renderIndeedTable();
-    }
-    saveIndeedToFirebase();
-    document.getElementById('indeedFileInput').value = '';
 }
 
 function renderIndeedTable() {
