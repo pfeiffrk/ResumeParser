@@ -187,6 +187,7 @@ function parseBasic(text, fileName) {
         email: extractEmail(text),
         phone: extractPhone(text),
         degrees: extractDegrees(text),
+        securityPlus: extractSecurityPlus(text),
         education: extractEducation(text),
         clearance: extractClearance(text),
         certifications: extractCertifications(text),
@@ -271,6 +272,10 @@ function extractDegrees(text) {
     return found.length > 0 ? found.join('; ') : 'None';
 }
 
+function extractSecurityPlus(text) {
+    return /security\s*\+|comptia\s+security|sec\+/i.test(text) ? 'Yes' : 'No';
+}
+
 function extractEducation(text) {
     const degrees = text.match(/(?:Bachelor|Master|Ph\.?D|B\.?S\.?|B\.?A\.?|M\.?S\.?|M\.?A\.?|MBA|Associate|Doctorate|GED|High\s+School\s+Diploma)[^.\n;]{0,120}/gi);
     if (degrees && degrees.length > 0) {
@@ -314,6 +319,7 @@ async function parseWithAI(text, fileName) {
   "phone": "phone number or Not found",
   "degrees": "highest degree level(s) as: PhD, Masters, Bachelors, Associates, or None — semicolon-separated if multiple",
   "education": "full education details with schools and fields of study, semicolon-separated, or Not found",
+  "securityPlus": "Yes or No — whether the candidate has CompTIA Security+ certification",
   "clearance": "security clearance level (e.g. Top Secret/SCI, Secret, Public Trust) or None found",
   "certifications": "all certifications, semicolon-separated, or None found"
 }
@@ -355,6 +361,7 @@ ${text.substring(0, 15000)}`;
             email: parsed.email || 'Not found',
             phone: parsed.phone || 'Not found',
             degrees: parsed.degrees || 'None found',
+            securityPlus: parsed.securityPlus === 'Yes' ? 'Yes' : 'No',
             education: parsed.education || 'Not found',
             clearance: parsed.clearance || 'None found',
             certifications: parsed.certifications || 'None found',
@@ -508,10 +515,10 @@ function renderTable() {
     html += '<thead><tr>';
     html += '<th></th>';
     html += buildSortHeader('Name', 'name');
-    html += buildSortHeader('File', 'fileName');
     html += buildSortHeader('Email', 'email');
     html += buildSortHeader('Phone', 'phone');
     html += buildSortHeader('Degrees', 'degrees');
+    html += buildSortHeader('Sec+', 'securityPlus');
     html += buildSortHeader('Clearance', 'clearance');
     html += buildSortHeader('Certifications', 'certifications');
     html += '<th>Mode</th><th></th>';
@@ -526,10 +533,10 @@ function renderTable() {
             const hasBlob = !!pdfBlobUrls[r.id];
             html += `<td><div class="cell-inner">${hasBlob ? `<button class="btn-see-resume" onclick="viewResume('${r.id}')">See Resume</button>` : ''}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.name)}</div></td>`;
-            html += `<td><div class="cell-inner cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</div></td>`;
             html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.phone)}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.degrees)}</div></td>`;
+            html += `<td><div class="cell-inner">${r.securityPlus === 'Yes' ? '<span style="color:var(--success);font-weight:600;">Yes</span>' : 'No'}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.clearance)}</div></td>`;
             html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.certifications)}</div></td>`;
             html += `<td><div class="cell-inner"><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></div></td>`;
@@ -658,11 +665,11 @@ function setParseMode(mode) {
 // ── CSV Export ──
 function exportCSV() {
     if (results.length === 0) { alert('No results to export.'); return; }
-    const headers = ['Name', 'File', 'Email', 'Phone', 'Degrees', 'Security Clearance', 'Certifications', 'Parse Mode'];
+    const headers = ['Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Security Clearance', 'Certifications', 'Parse Mode'];
     const rows = [headers];
     results.forEach(r => {
-        rows.push([r.name || '', r.fileName || '', r.email || '', r.phone || '',
-            r.degrees || '', r.clearance || '', r.certifications || '', r.parseMode || '']);
+        rows.push([r.name || '', r.email || '', r.phone || '',
+            r.degrees || '', r.securityPlus || 'No', r.clearance || '', r.certifications || '', r.parseMode || '']);
     });
     let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
