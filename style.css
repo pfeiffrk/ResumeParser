@@ -66,6 +66,10 @@ body {
 }
 #appTitle { font-weight: 700; font-size: 16px; color: var(--text); }
 .toolbar-spacer { flex: 1; }
+.toolbar-checkbox {
+    display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer; white-space: nowrap;
+}
+.toolbar-checkbox input { cursor: pointer; }
 .toolbar-btn-file {
     background: var(--primary); color: #fff; border: 1px solid var(--primary); border-radius: 4px;
     padding: 5px 12px; font-size: 13px; cursor: pointer; font-family: inherit;

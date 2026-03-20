@@ -416,11 +416,26 @@ async function parseAll() {
         return;
     }
 
-    const total = uploadedFiles.length;
+    const rejectDupes = document.getElementById('cbRejectDupes').checked;
+    let filesToParse = uploadedFiles;
+    if (rejectDupes) {
+        const existing = new Set(results.map(r => r.fileName));
+        filesToParse = filesToParse.filter(f => !existing.has(f.name));
+        if (filesToParse.length === 0) {
+            alert('All selected files have already been parsed.');
+            return;
+        }
+        if (filesToParse.length < uploadedFiles.length) {
+            const skipped = uploadedFiles.length - filesToParse.length;
+            console.log(`Skipped ${skipped} duplicate(s).`);
+        }
+    }
+
+    const total = filesToParse.length;
     showProgress(0, total);
 
     for (let i = 0; i < total; i++) {
-        const file = uploadedFiles[i];
+        const file = filesToParse[i];
         updateProgress(i, total, file.name);
 
         try {
