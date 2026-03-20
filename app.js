@@ -860,17 +860,100 @@ function switchTab(tab) {
 let indeedResults = [];
 const indeedPdfBlobUrls = {};
 
-const indeedFileEl = document.getElementById('indeedFileInput');
-if (indeedFileEl) {
-    indeedFileEl.addEventListener('change', function(e) {
-        const files = Array.from(e.target.files);
-        if (files.length > 0) {
-            parseIndeed(files).catch(err => {
-                console.error('Indeed parse error:', err);
-                alert('Error: ' + err.message);
-            });
+function parseIndeedPaste() {
+    const text = document.getElementById('indeedPasteText').value.trim();
+    if (!text) { alert('Paste candidate data first.'); return; }
+
+    // Split into candidate blocks — each starts with a name in ALL CAPS repeated on two lines
+    const blocks = [];
+    const lines = text.split('\n').map(l => l.replace(/&nbsp;/g, '').trim());
+    let current = null;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Detect candidate start: a line that is mostly uppercase letters and spaces,
+        // followed by same name on next line (Indeed duplicates the name)
+        if (line.length > 2 && /^[A-Z\s.\-']+$/.test(line) && lines[i + 1] && lines[i + 1].toUpperCase() === line.toUpperCase()) {
+            if (current) blocks.push(current);
+            current = { name: toTitleCase(line), lines: [] };
+            i++; // skip the duplicate name line
+            continue;
         }
+        if (current) current.lines.push(line);
+    }
+    if (current) blocks.push(current);
+
+    if (blocks.length === 0) {
+        alert('Could not find any candidates in the pasted text.');
+        return;
+    }
+
+    const rejectDupes = new Set(indeedResults.map(r => r.name.toLowerCase()));
+    let added = 0;
+
+    blocks.forEach(block => {
+        if (rejectDupes.has(block.name.toLowerCase())) return;
+
+        const allText = block.lines.join('\n');
+        const r = {
+            id: generateId(),
+            name: block.name,
+            location: extractIndeedField(block.lines, 0) || '',
+            workExperience: extractIndeedSection(block.lines, 'Relevant Work Experience'),
+            education: extractIndeedSection(block.lines, 'Education'),
+            certifications: extractIndeedSection(block.lines, 'Licenses and certifications'),
+            securityPlus: /security\s*\+|sec\+/i.test(allText) ? 'Yes' : 'No',
+            clearance: extractClearance(allText),
+            lastUpdated: extractIndeedMeta(block.lines, 'Recently updated'),
+            lastActive: extractIndeedMeta(block.lines, 'Active'),
+            contacted: extractIndeedMeta(block.lines, 'Contacted'),
+            status: statusOptions[0],
+            commsStatus: commsOptions[0],
+            parsedAt: Date.now()
+        };
+        indeedResults.push(r);
+        added++;
     });
+
+    document.getElementById('indeedPasteText').value = '';
+    document.getElementById('indeedPasteArea').style.display = 'none';
+    renderIndeedTable();
+    saveIndeedToFirebase();
+    if (added > 0) console.log(`Added ${added} candidate(s) from Indeed.`);
+}
+
+function toTitleCase(str) {
+    return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function extractIndeedField(lines, offset) {
+    // First non-empty line after the name (location)
+    for (let i = offset; i < lines.length; i++) {
+        const l = lines[i].trim();
+        if (l && !/^(Relevant|Education|Licenses|Recently|Active|Contacted)/i.test(l)) return l;
+        if (/^(Relevant|Education|Licenses)/i.test(l)) break;
+    }
+    return '';
+}
+
+function extractIndeedSection(lines, header) {
+    const items = [];
+    let inSection = false;
+    for (const line of lines) {
+        if (line.toLowerCase().startsWith(header.toLowerCase())) { inSection = true; continue; }
+        if (inSection) {
+            if (/^(Relevant Work|Education|Licenses and cert|Recently updated|Active|Contacted)/i.test(line)) break;
+            if (line && line !== '&nbsp;' && !/^\+\d+ more$/.test(line)) items.push(line);
+        }
+    }
+    return items.join('; ').replace(/\s*;\s*;/g, ';').trim() || 'None';
+}
+
+function extractIndeedMeta(lines, prefix) {
+    for (const line of lines) {
+        if (line.toLowerCase().startsWith(prefix.toLowerCase())) return line;
+    }
+    return '';
 }
 
 async function parseIndeed(files) {
@@ -934,29 +1017,31 @@ async function parseIndeed(files) {
 function renderIndeedTable() {
     const container = document.getElementById('indeedViewContainer');
     let html = '<table class="results-table">';
-    html += '<thead><tr><th></th>';
+    html += '<thead><tr>';
     html += '<th>Review Status</th><th>Comms Status</th>';
-    html += '<th>Name</th><th>Email</th><th>Phone</th><th>Degrees</th>';
-    html += '<th>Sec+</th><th>Clearance</th><th>Certifications</th><th></th>';
+    html += '<th>Name</th><th>Location</th><th>Work Experience</th><th>Education</th>';
+    html += '<th>Sec+</th><th>Clearance</th><th>Certifications</th>';
+    html += '<th>Last Updated</th><th>Last Active</th><th>Contacted</th><th></th>';
     html += '</tr></thead><tbody>';
     if (indeedResults.length === 0) {
-        html += '<tr class="empty-row"><td colspan="11">No results yet. Upload Indeed PDFs to get started.</td></tr>';
+        html += '<tr class="empty-row"><td colspan="13">No results yet. Click "Paste from Indeed" to get started.</td></tr>';
     } else {
         indeedResults.forEach(r => {
-            const hasPdf = !!indeedPdfBlobUrls[r.id] || !!r.pdfUrl;
             const statusOpts = statusOptions.map(s => `<option value="${escapeHtml(s)}"${(r.status || statusOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
             const commsOpts = commsOptions.map(s => `<option value="${escapeHtml(s)}"${(r.commsStatus || commsOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
             html += '<tr>';
-            html += `<td>${hasPdf ? `<button class="btn-see-resume" onclick="viewIndeedResume('${r.id}')">See Resume</button>` : ''}</td>`;
             html += `<td><select class="status-select" onchange="updateIndeedField('${r.id}','status',this.value)">${statusOpts}</select></td>`;
             html += `<td><select class="status-select" onchange="updateIndeedField('${r.id}','commsStatus',this.value)">${commsOpts}</select></td>`;
-            html += `<td>${escapeHtml(r.name)}</td>`;
-            html += `<td class="cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></td>`;
-            html += `<td>${escapeHtml(r.phone)}</td>`;
-            html += `<td>${escapeHtml(r.degrees)}</td>`;
+            html += `<td><strong>${escapeHtml(r.name)}</strong></td>`;
+            html += `<td>${escapeHtml(r.location)}</td>`;
+            html += `<td class="cell-wrap">${escapeHtml(r.workExperience)}</td>`;
+            html += `<td class="cell-wrap">${escapeHtml(r.education)}</td>`;
             html += `<td>${r.securityPlus === 'Yes' ? '<span style="color:var(--success);font-weight:600;">Yes</span>' : 'No'}</td>`;
             html += `<td>${escapeHtml(r.clearance)}</td>`;
-            html += `<td>${escapeHtml(r.certifications)}</td>`;
+            html += `<td class="cell-wrap">${escapeHtml(r.certifications)}</td>`;
+            html += `<td style="font-size:11px;">${escapeHtml(r.lastUpdated)}</td>`;
+            html += `<td style="font-size:11px;">${escapeHtml(r.lastActive)}</td>`;
+            html += `<td style="font-size:11px;">${escapeHtml(r.contacted)}</td>`;
             html += `<td><button class="btn-icon" onclick="deleteIndeedResult('${r.id}')" title="Remove">&#10005;</button></td>`;
             html += '</tr>';
         });
@@ -1000,11 +1085,12 @@ function saveIndeedToFirebase() {
 
 function exportIndeedCSV() {
     if (indeedResults.length === 0) { alert('No results to export.'); return; }
-    const headers = ['Review Status', 'Comms Status', 'Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Clearance', 'Certifications'];
+    const headers = ['Review Status', 'Comms Status', 'Name', 'Location', 'Work Experience', 'Education', 'Security+', 'Clearance', 'Certifications', 'Last Updated', 'Last Active', 'Contacted'];
     const rows = [headers];
     indeedResults.forEach(r => {
-        rows.push([r.status || '', r.commsStatus || '', r.name || '', r.email || '', r.phone || '',
-            r.degrees || '', r.securityPlus || 'No', r.clearance || '', r.certifications || '']);
+        rows.push([r.status || '', r.commsStatus || '', r.name || '', r.location || '', r.workExperience || '',
+            r.education || '', r.securityPlus || 'No', r.clearance || '', r.certifications || '',
+            r.lastUpdated || '', r.lastActive || '', r.contacted || '']);
     });
     let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });

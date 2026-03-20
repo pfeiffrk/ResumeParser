@@ -74,6 +74,18 @@
 
     <!-- Indeed Review Tab -->
     <div id="indeedTab" style="display:none;">
+        <div id="indeedToolbar">
+            <button onclick="document.getElementById('indeedPasteArea').style.display=''" class="toolbar-btn-file">Paste from Indeed</button>
+            <button onclick="clearIndeedResults()">Clear</button>
+            <button onclick="exportIndeedCSV()">Export CSV</button>
+        </div>
+        <div id="indeedPasteArea" style="display:none;">
+            <textarea id="indeedPasteText" placeholder="Paste candidate data from Indeed here..." rows="8"></textarea>
+            <div class="paste-actions">
+                <button class="btn-primary" onclick="parseIndeedPaste()">Parse</button>
+                <button class="btn-secondary" onclick="document.getElementById('indeedPasteArea').style.display='none'">Cancel</button>
+            </div>
+        </div>
         <div id="indeedViewContainer"></div>
     </div>
 
