@@ -43,6 +43,15 @@
         <button id="btnSignOut" onclick="firebaseSignOut()">Sign Out</button>
     </div>
 
+    <!-- Tab Bar -->
+    <div id="tabBar">
+        <button class="tab-btn active" id="tabResumes" onclick="switchTab('resumes')">Resume Parser</button>
+        <button class="tab-btn" id="tabIndeed" onclick="switchTab('indeed')">Indeed Review</button>
+    </div>
+
+    <!-- Resume Parser Tab -->
+    <div id="resumesTab">
+
     <!-- Progress Bar -->
     <div id="progressBar" style="display:none;">
         <div id="progressFill"></div>
@@ -60,6 +69,26 @@
 
     <!-- Results Table -->
     <div id="viewContainer"></div>
+
+    </div><!-- end resumesTab -->
+
+    <!-- Indeed Review Tab -->
+    <div id="indeedTab" style="display:none;">
+        <div id="indeedToolbar">
+            <label class="toolbar-btn-file">
+                Upload &amp; Parse
+                <input type="file" id="indeedFileInput" accept=".pdf" multiple style="display:none">
+            </label>
+            <label class="toolbar-checkbox">
+                <input type="checkbox" id="cbIndeedRejectDupes" checked>
+                Reject Duplicates
+            </label>
+            <button onclick="clearIndeedResults()">Clear</button>
+            <button onclick="exportIndeedCSV()">Export CSV</button>
+        </div>
+        <div id="indeedViewContainer"></div>
+    </div>
+
 </div>
 
 <!-- Settings Modal -->

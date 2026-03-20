@@ -67,11 +67,13 @@ function startDataListener() {
         const data = snap.val();
         if (data) {
             try { results = JSON.parse(data.resumeparser_results || '[]'); } catch (e) { results = []; }
+            try { indeedResults = JSON.parse(data.resumeparser_indeed || '[]'); } catch (e) { indeedResults = []; }
         } else {
             results = [];
         }
         statusEl.textContent = '';
         renderTable();
+        renderIndeedTable();
     });
 }
 
@@ -841,6 +843,171 @@ function saveSettings() {
     if (key) localStorage.setItem('resumeparser_apikey', key);
     else localStorage.removeItem('resumeparser_apikey');
     closeSettingsModal();
+}
+
+// ── Tab Switching ──
+let activeTab = 'resumes';
+
+function switchTab(tab) {
+    activeTab = tab;
+    document.getElementById('tabResumes').classList.toggle('active', tab === 'resumes');
+    document.getElementById('tabIndeed').classList.toggle('active', tab === 'indeed');
+    document.getElementById('resumesTab').style.display = tab === 'resumes' ? 'flex' : 'none';
+    document.getElementById('indeedTab').style.display = tab === 'indeed' ? 'flex' : 'none';
+}
+
+// ── Indeed Review ──
+let indeedResults = [];
+const indeedPdfBlobUrls = {};
+
+document.getElementById('indeedFileInput').addEventListener('change', function(e) {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+        parseIndeed(files).catch(err => {
+            console.error('Indeed parse error:', err);
+            alert('Error: ' + err.message);
+        });
+    }
+});
+
+async function parseIndeed(files) {
+    const rejectDupes = document.getElementById('cbIndeedRejectDupes').checked;
+    let filesToParse = files;
+    if (rejectDupes) {
+        const existing = new Set(indeedResults.map(r => r.fileName));
+        const seen = new Set();
+        filesToParse = filesToParse.filter(f => {
+            if (existing.has(f.name) || seen.has(f.name)) return false;
+            seen.add(f.name);
+            return true;
+        });
+        if (filesToParse.length === 0) { alert('All selected files already parsed.'); return; }
+    }
+
+    for (const file of filesToParse) {
+        try {
+            const blobUrl = URL.createObjectURL(file);
+            const text = await extractTextFromPDF(file);
+            const result = {
+                id: generateId(),
+                fileName: file.name,
+                name: extractName(text),
+                email: extractEmail(text),
+                phone: extractPhone(text),
+                degrees: extractDegrees(text),
+                securityPlus: extractSecurityPlus(text),
+                clearance: extractClearance(text),
+                certifications: extractCertifications(text),
+                status: statusOptions[0],
+                commsStatus: commsOptions[0],
+                parsedAt: Date.now()
+            };
+            indeedPdfBlobUrls[result.id] = blobUrl;
+            indeedResults.push(result);
+
+            if (typeof firebase !== 'undefined' && firebase.storage) {
+                const rid = result.id;
+                firebase.storage().ref(`users/${firebaseUser.uid}/indeed/${file.name}`)
+                    .put(file).then(s => s.ref.getDownloadURL())
+                    .then(url => { const r = indeedResults.find(x => x.id === rid); if (r) { r.pdfUrl = url; saveIndeedToFirebase(); } })
+                    .catch(err => console.warn('Storage upload failed:', err));
+            }
+        } catch (e) {
+            indeedResults.push({
+                id: generateId(), fileName: file.name,
+                name: 'ERROR: ' + e.message,
+                email: '', phone: '', degrees: '', securityPlus: 'No',
+                clearance: '', certifications: '',
+                status: statusOptions[0], commsStatus: commsOptions[0],
+                parsedAt: Date.now()
+            });
+        }
+        renderIndeedTable();
+    }
+    saveIndeedToFirebase();
+    document.getElementById('indeedFileInput').value = '';
+}
+
+function renderIndeedTable() {
+    const container = document.getElementById('indeedViewContainer');
+    let html = '<table class="results-table">';
+    html += '<thead><tr><th></th>';
+    html += '<th>Review Status</th><th>Comms Status</th>';
+    html += '<th>Name</th><th>Email</th><th>Phone</th><th>Degrees</th>';
+    html += '<th>Sec+</th><th>Clearance</th><th>Certifications</th><th></th>';
+    html += '</tr></thead><tbody>';
+    if (indeedResults.length === 0) {
+        html += '<tr class="empty-row"><td colspan="11">No results yet. Upload Indeed PDFs to get started.</td></tr>';
+    } else {
+        indeedResults.forEach(r => {
+            const hasPdf = !!indeedPdfBlobUrls[r.id] || !!r.pdfUrl;
+            const statusOpts = statusOptions.map(s => `<option value="${escapeHtml(s)}"${(r.status || statusOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
+            const commsOpts = commsOptions.map(s => `<option value="${escapeHtml(s)}"${(r.commsStatus || commsOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
+            html += '<tr>';
+            html += `<td>${hasPdf ? `<button class="btn-see-resume" onclick="viewIndeedResume('${r.id}')">See Resume</button>` : ''}</td>`;
+            html += `<td><select class="status-select" onchange="updateIndeedField('${r.id}','status',this.value)">${statusOpts}</select></td>`;
+            html += `<td><select class="status-select" onchange="updateIndeedField('${r.id}','commsStatus',this.value)">${commsOpts}</select></td>`;
+            html += `<td>${escapeHtml(r.name)}</td>`;
+            html += `<td class="cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></td>`;
+            html += `<td>${escapeHtml(r.phone)}</td>`;
+            html += `<td>${escapeHtml(r.degrees)}</td>`;
+            html += `<td>${r.securityPlus === 'Yes' ? '<span style="color:var(--success);font-weight:600;">Yes</span>' : 'No'}</td>`;
+            html += `<td>${escapeHtml(r.clearance)}</td>`;
+            html += `<td>${escapeHtml(r.certifications)}</td>`;
+            html += `<td><button class="btn-icon" onclick="deleteIndeedResult('${r.id}')" title="Remove">&#10005;</button></td>`;
+            html += '</tr>';
+        });
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function updateIndeedField(id, field, value) {
+    const r = indeedResults.find(x => x.id === id);
+    if (r) { r[field] = value; saveIndeedToFirebase(); }
+}
+
+function deleteIndeedResult(id) {
+    indeedResults = indeedResults.filter(r => r.id !== id);
+    renderIndeedTable();
+    saveIndeedToFirebase();
+}
+
+function clearIndeedResults() {
+    if (indeedResults.length === 0) return;
+    if (!confirm('Clear all Indeed results?')) return;
+    indeedResults = [];
+    renderIndeedTable();
+    saveIndeedToFirebase();
+}
+
+function viewIndeedResume(id) {
+    let url = indeedPdfBlobUrls[id];
+    if (!url) { const r = indeedResults.find(x => x.id === id); if (r && r.pdfUrl) url = r.pdfUrl; }
+    if (!url) { alert('Resume not available.'); return; }
+    document.getElementById('pdfViewerFrame').src = url;
+    document.getElementById('viewerName').textContent = (indeedResults.find(x => x.id === id) || {}).name || '';
+    document.getElementById('pdfViewerOverlay').classList.add('show');
+}
+
+function saveIndeedToFirebase() {
+    if (!firebaseUser) return;
+    userRef().update({ resumeparser_indeed: JSON.stringify(indeedResults) });
+}
+
+function exportIndeedCSV() {
+    if (indeedResults.length === 0) { alert('No results to export.'); return; }
+    const headers = ['Review Status', 'Comms Status', 'Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Clearance', 'Certifications'];
+    const rows = [headers];
+    indeedResults.forEach(r => {
+        rows.push([r.status || '', r.commsStatus || '', r.name || '', r.email || '', r.phone || '',
+            r.degrees || '', r.securityPlus || 'No', r.clearance || '', r.certifications || '']);
+    });
+    let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'indeed_resumes.csv'; a.click();
+    URL.revokeObjectURL(url);
 }
 
 // ── Init ──
