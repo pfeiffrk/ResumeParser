@@ -872,16 +872,25 @@ function parseIndeedPaste() {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+        const lineAfter = i + 2 < lines.length ? lines[i + 2] : '';
 
-        // Detect candidate start: name repeated on two consecutive lines (any case)
         // A name is 2+ words, all letters/spaces/hyphens/apostrophes
         const isNameLike = line.length > 2 && /^[A-Za-z\s.\-']+$/.test(line) && line.includes(' ');
         const isDuplicate = nextLine.trim().toLowerCase() === line.toLowerCase();
+        const isLocationNext = /^[A-Za-z\s]+,\s*[A-Z]{2}$/.test(nextLine);
+        const isLocationAfterDup = /^[A-Za-z\s]+,\s*[A-Z]{2}$/.test(lineAfter);
 
         if (isNameLike && isDuplicate) {
+            // Name duplicated — skip the duplicate, next is location
             if (current) blocks.push(current);
             current = { name: toTitleCase(line), lines: [] };
-            i++; // skip duplicate name line
+            i++; // skip duplicate
+            continue;
+        }
+        if (isNameLike && isLocationNext && !/^(Relevant|Education|Licenses|Recently|Active|Contacted|Updated|Military)/i.test(line)) {
+            // Name followed directly by location (no duplicate)
+            if (current) blocks.push(current);
+            current = { name: toTitleCase(line), lines: [] };
             continue;
         }
         if (current) current.lines.push(line);
