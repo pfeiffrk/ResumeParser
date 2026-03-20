@@ -186,6 +186,7 @@ function parseBasic(text, fileName) {
         name: extractName(text),
         email: extractEmail(text),
         phone: extractPhone(text),
+        degrees: extractDegrees(text),
         education: extractEducation(text),
         clearance: extractClearance(text),
         certifications: extractCertifications(text),
@@ -246,6 +247,15 @@ function extractPhone(text) {
     return match ? match[0] : 'Not found';
 }
 
+function extractDegrees(text) {
+    const degreePatterns = /(?:Bachelor(?:'s)?(?:\s+of\s+\w+)?|Master(?:'s)?(?:\s+of\s+\w+)?|Ph\.?D\.?|Doctorate|B\.?S\.?|B\.?A\.?|M\.?S\.?|M\.?A\.?|MBA|M\.?B\.?A\.?|Associate(?:'s)?|GED|High\s+School\s+Diploma|B\.?Sc\.?|M\.?Sc\.?|J\.?D\.?|M\.?D\.?|Ed\.?D\.?|D\.?B\.?A\.?)/gi;
+    const matches = text.match(degreePatterns);
+    if (matches && matches.length > 0) {
+        return [...new Set(matches.map(d => d.trim()))].join('; ');
+    }
+    return 'None found';
+}
+
 function extractEducation(text) {
     const degrees = text.match(/(?:Bachelor|Master|Ph\.?D|B\.?S\.?|B\.?A\.?|M\.?S\.?|M\.?A\.?|MBA|Associate|Doctorate|GED|High\s+School\s+Diploma)[^.\n;]{0,120}/gi);
     if (degrees && degrees.length > 0) {
@@ -287,7 +297,8 @@ async function parseWithAI(text, fileName) {
   "name": "Full Name",
   "email": "email@example.com or Not found",
   "phone": "phone number or Not found",
-  "education": "all degrees and schools, semicolon-separated, or Not found",
+  "degrees": "degree types only (e.g. B.S., MBA, Ph.D), semicolon-separated, or None found",
+  "education": "full education details with schools and fields of study, semicolon-separated, or Not found",
   "clearance": "security clearance level (e.g. Top Secret/SCI, Secret, Public Trust) or None found",
   "certifications": "all certifications, semicolon-separated, or None found"
 }
@@ -328,6 +339,7 @@ ${text.substring(0, 15000)}`;
             name: parsed.name || 'Not found',
             email: parsed.email || 'Not found',
             phone: parsed.phone || 'Not found',
+            degrees: parsed.degrees || 'None found',
             education: parsed.education || 'Not found',
             clearance: parsed.clearance || 'None found',
             certifications: parsed.certifications || 'None found',
@@ -469,6 +481,7 @@ function renderTable() {
     html += buildSortHeader('File', 'fileName');
     html += buildSortHeader('Email', 'email');
     html += buildSortHeader('Phone', 'phone');
+    html += buildSortHeader('Degrees', 'degrees');
     html += buildSortHeader('Education', 'education');
     html += buildSortHeader('Clearance', 'clearance');
     html += buildSortHeader('Certifications', 'certifications');
@@ -476,7 +489,7 @@ function renderTable() {
     html += '</tr></thead><tbody>';
 
     if (sorted.length === 0) {
-        html += '<tr class="empty-row"><td colspan="10">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
+        html += '<tr class="empty-row"><td colspan="11">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
     } else {
         sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
@@ -487,13 +500,14 @@ function renderTable() {
             html += `<td><div class="cell-inner cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</div></td>`;
             html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.phone)}</div></td>`;
+            html += `<td><div class="cell-inner">${escapeHtml(r.degrees)}</div></td>`;
             html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.education)}</div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.clearance)}</div></td>`;
             html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.certifications)}</div></td>`;
             html += `<td><div class="cell-inner"><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></div></td>`;
             html += `<td><div class="cell-inner"><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></div></td>`;
             html += '</tr>';
-            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="10"><div class="row-resizer"></div></td></tr>`;
+            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="11"><div class="row-resizer"></div></td></tr>`;
         });
     }
 
@@ -593,11 +607,11 @@ function setParseMode(mode) {
 // ── CSV Export ──
 function exportCSV() {
     if (results.length === 0) { alert('No results to export.'); return; }
-    const headers = ['File', 'Name', 'Email', 'Phone', 'Education', 'Security Clearance', 'Certifications', 'Parse Mode'];
+    const headers = ['Name', 'File', 'Email', 'Phone', 'Degrees', 'Education', 'Security Clearance', 'Certifications', 'Parse Mode'];
     const rows = [headers];
     results.forEach(r => {
-        rows.push([r.fileName || '', r.name || '', r.email || '', r.phone || '',
-            r.education || '', r.clearance || '', r.certifications || '', r.parseMode || '']);
+        rows.push([r.name || '', r.fileName || '', r.email || '', r.phone || '',
+            r.degrees || '', r.education || '', r.clearance || '', r.certifications || '', r.parseMode || '']);
     });
     let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
