@@ -557,6 +557,29 @@ function initRowResizers() {
     });
 }
 
+function startColResize(e, handle) {
+    e.stopPropagation();
+    e.preventDefault();
+    const th = handle.parentElement;
+    const startX = e.clientX;
+    const startW = th.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+
+    function onMove(ev) {
+        const dx = ev.clientX - startX;
+        th.style.width = Math.max(40, startW + dx) + 'px';
+    }
+    function onUp() {
+        handle.classList.remove('active');
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
 function viewResume(id) {
     const url = pdfBlobUrls[id];
     if (!url) { alert('Resume file no longer available. Re-upload to view.'); return; }
@@ -574,7 +597,7 @@ function buildSortHeader(label, field) {
     const isActive = sortField === field;
     const arrow = isActive ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '\u25B2';
     const cls = isActive ? 'active' : '';
-    return `<th onclick="toggleSort('${field}')">${label} <span class="sort-arrow ${cls}">${arrow}</span></th>`;
+    return `<th onclick="toggleSort('${field}')">${label} <span class="sort-arrow ${cls}">${arrow}</span><div class="col-resizer" onmousedown="startColResize(event, this)"></div></th>`;
 }
 
 function toggleSort(field) {

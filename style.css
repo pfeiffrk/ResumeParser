@@ -127,13 +127,20 @@ body {
 .results-table {
     width: 100%; border-collapse: collapse; background: #fff;
     border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+    table-layout: fixed;
 }
 .results-table th {
     background: #f0f1f5; padding: 10px 12px; text-align: left; font-size: 13px;
     font-weight: 600; color: #555; border-bottom: 2px solid var(--border);
     cursor: pointer; user-select: none; white-space: nowrap;
+    position: relative; overflow: hidden;
 }
 .results-table th:hover { background: #e4e6ec; }
+.col-resizer {
+    position: absolute; top: 0; right: 0; width: 5px; height: 100%;
+    cursor: col-resize; z-index: 2;
+}
+.col-resizer:hover, .col-resizer.active { background: rgba(74,144,217,0.3); }
 .results-table th .sort-arrow { font-size: 10px; margin-left: 4px; color: #aaa; }
 .results-table th .sort-arrow.active { color: var(--primary); }
 .results-table td {
