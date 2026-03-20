@@ -217,6 +217,13 @@ body {
 }
 .btn-secondary:hover { background: #d0d0d0; }
 
+/* ── Status Dropdown ── */
+.status-select {
+    padding: 2px 4px; font-size: 12px; border: 1px solid var(--border); border-radius: 3px;
+    background: #fff; color: var(--text); font-family: inherit; cursor: pointer; width: 100%;
+}
+.status-select:focus { outline: none; border-color: var(--primary); }
+
 /* ── See Resume Button ── */
 .btn-see-resume {
     background: var(--primary); color: #fff; border: none; border-radius: 4px;

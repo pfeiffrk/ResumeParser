@@ -18,6 +18,8 @@ let dataListener = null;
 let sortField = 'name';
 let sortDir = 'asc';
 const pdfBlobUrls = {}; // id -> blob URL for viewing PDFs
+const DEFAULT_STATUS_OPTIONS = ['New', 'Reviewing', 'Interview', 'Hired', 'Rejected'];
+let statusOptions = [...DEFAULT_STATUS_OPTIONS];
 
 // ── PDF.js Setup ──
 if (typeof pdfjsLib !== 'undefined') {
@@ -514,6 +516,7 @@ function renderTable() {
     let html = '<div class="results-table-wrapper"><table class="results-table">';
     html += '<thead><tr>';
     html += '<th></th>';
+    html += buildSortHeader('Status', 'status');
     html += buildSortHeader('Name', 'name');
     html += buildSortHeader('Email', 'email');
     html += buildSortHeader('Phone', 'phone');
@@ -525,13 +528,15 @@ function renderTable() {
     html += '</tr></thead><tbody>';
 
     if (sorted.length === 0) {
-        html += '<tr class="empty-row"><td colspan="10">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
+        html += '<tr class="empty-row"><td colspan="11">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
     } else {
         sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
             html += `<tr data-row="${idx}">`;
             const hasBlob = !!pdfBlobUrls[r.id];
             html += `<td><div class="cell-inner">${hasBlob ? `<button class="btn-see-resume" onclick="viewResume('${r.id}')">See Resume</button>` : ''}</div></td>`;
+            const statusOpts = statusOptions.map(s => `<option value="${escapeHtml(s)}"${(r.status || statusOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
+            html += `<td><div class="cell-inner"><select class="status-select" onchange="updateStatus('${r.id}', this.value)">${statusOpts}</select></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.name)}</div></td>`;
             html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.phone)}</div></td>`;
@@ -542,7 +547,7 @@ function renderTable() {
             html += `<td><div class="cell-inner"><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></div></td>`;
             html += `<td><div class="cell-inner"><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></div></td>`;
             html += '</tr>';
-            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="10"><div class="row-resizer"></div></td></tr>`;
+            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="11"><div class="row-resizer"></div></td></tr>`;
         });
     }
 
@@ -642,6 +647,11 @@ function getSortedResults() {
 }
 
 // ── Actions ──
+function updateStatus(id, value) {
+    const r = results.find(x => x.id === id);
+    if (r) { r.status = value; saveToFirebase(); }
+}
+
 function deleteResult(id) {
     results = results.filter(r => r.id !== id);
     renderTable();
@@ -665,10 +675,10 @@ function setParseMode(mode) {
 // ── CSV Export ──
 function exportCSV() {
     if (results.length === 0) { alert('No results to export.'); return; }
-    const headers = ['Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Security Clearance', 'Certifications', 'Parse Mode'];
+    const headers = ['Status', 'Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Security Clearance', 'Certifications', 'Parse Mode'];
     const rows = [headers];
     results.forEach(r => {
-        rows.push([r.name || '', r.email || '', r.phone || '',
+        rows.push([r.status || statusOptions[0], r.name || '', r.email || '', r.phone || '',
             r.degrees || '', r.securityPlus || 'No', r.clearance || '', r.certifications || '', r.parseMode || '']);
     });
     let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -682,6 +692,7 @@ function exportCSV() {
 // ── Settings Modal ──
 function openSettingsModal() {
     document.getElementById('settingsModalOverlay').classList.add('show');
+    document.getElementById('statusOptionsInput').value = statusOptions.join(', ');
     document.getElementById('apiKeyInput').value = localStorage.getItem('resumeparser_apikey') || '';
 }
 
@@ -693,10 +704,20 @@ function saveSettings() {
     const key = document.getElementById('apiKeyInput').value.trim();
     if (key) localStorage.setItem('resumeparser_apikey', key);
     else localStorage.removeItem('resumeparser_apikey');
+
+    const opts = document.getElementById('statusOptionsInput').value
+        .split(',').map(s => s.trim()).filter(s => s.length > 0);
+    if (opts.length > 0) statusOptions = opts;
+    else statusOptions = [...DEFAULT_STATUS_OPTIONS];
+    localStorage.setItem('resumeparser_statusoptions', JSON.stringify(statusOptions));
+
     closeSettingsModal();
+    renderTable();
 }
 
 // ── Init ──
+try { const saved = JSON.parse(localStorage.getItem('resumeparser_statusoptions')); if (saved && saved.length) statusOptions = saved; } catch(e) {}
+
 if (typeof firebase !== 'undefined') {
     initFirebase();
 } else {
