@@ -52,6 +52,13 @@ body {
 .sign-in-box .auth-secondary { background: none; color: var(--text-light); font-size: 12px; border: none; padding: 4px; cursor: pointer; }
 .sign-in-box .auth-secondary:hover { color: var(--text); }
 
+/* ── App Layout ── */
+#app {
+    flex-direction: column !important;
+    height: 100vh;
+    overflow: hidden;
+}
+
 /* ── Toolbar ── */
 #toolbar {
     display: flex; align-items: center; gap: 8px; padding: 8px 16px;
@@ -114,7 +121,7 @@ body {
 .file-item .file-remove:hover { color: var(--danger); }
 
 /* ── View Container ── */
-#viewContainer { flex: 1; overflow: auto; padding: 16px; }
+#viewContainer { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
 
 /* ── Results Table ── */
 .results-table {
