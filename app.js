@@ -20,6 +20,8 @@ let sortDir = 'asc';
 const pdfBlobUrls = {}; // id -> blob URL for viewing PDFs
 const DEFAULT_STATUS_OPTIONS = ['New', 'Reviewing', 'Interview', 'Hired', 'Rejected'];
 let statusOptions = [...DEFAULT_STATUS_OPTIONS];
+const DEFAULT_COMMS_OPTIONS = ['Not Contacted', 'Email Sent', 'Phone Call', 'Scheduled', 'Follow Up', 'No Response'];
+let commsOptions = [...DEFAULT_COMMS_OPTIONS];
 
 // ── PDF.js Setup ──
 if (typeof pdfjsLib !== 'undefined') {
@@ -517,6 +519,7 @@ function renderTable() {
     html += '<thead><tr>';
     html += '<th></th>';
     html += buildSortHeader('Review Status', 'status');
+    html += buildSortHeader('Comms Status', 'commsStatus');
     html += buildSortHeader('Name', 'name');
     html += buildSortHeader('Email', 'email');
     html += buildSortHeader('Phone', 'phone');
@@ -528,7 +531,7 @@ function renderTable() {
     html += '</tr></thead><tbody>';
 
     if (sorted.length === 0) {
-        html += '<tr class="empty-row"><td colspan="11">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
+        html += '<tr class="empty-row"><td colspan="12">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
     } else {
         sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
@@ -537,6 +540,8 @@ function renderTable() {
             html += `<td><div class="cell-inner">${hasBlob ? `<button class="btn-see-resume" onclick="viewResume('${r.id}')">See Resume</button>` : ''}</div></td>`;
             const statusOpts = statusOptions.map(s => `<option value="${escapeHtml(s)}"${(r.status || statusOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
             html += `<td><div class="cell-inner"><select class="status-select" onchange="updateStatus('${r.id}', this.value)">${statusOpts}</select></div></td>`;
+            const commsOpts = commsOptions.map(s => `<option value="${escapeHtml(s)}"${(r.commsStatus || commsOptions[0]) === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
+            html += `<td><div class="cell-inner"><select class="status-select" onchange="updateCommsStatus('${r.id}', this.value)">${commsOpts}</select></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.name)}</div></td>`;
             html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
             html += `<td><div class="cell-inner">${escapeHtml(r.phone)}</div></td>`;
@@ -547,7 +552,7 @@ function renderTable() {
             html += `<td><div class="cell-inner"><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></div></td>`;
             html += `<td><div class="cell-inner"><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></div></td>`;
             html += '</tr>';
-            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="11"><div class="row-resizer"></div></td></tr>`;
+            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="12"><div class="row-resizer"></div></td></tr>`;
         });
     }
 
@@ -652,6 +657,11 @@ function updateStatus(id, value) {
     if (r) { r.status = value; saveToFirebase(); }
 }
 
+function updateCommsStatus(id, value) {
+    const r = results.find(x => x.id === id);
+    if (r) { r.commsStatus = value; saveToFirebase(); }
+}
+
 function deleteResult(id) {
     results = results.filter(r => r.id !== id);
     renderTable();
@@ -675,10 +685,10 @@ function setParseMode(mode) {
 // ── CSV Export ──
 function exportCSV() {
     if (results.length === 0) { alert('No results to export.'); return; }
-    const headers = ['Review Status', 'Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Security Clearance', 'Certifications', 'Parse Mode'];
+    const headers = ['Review Status', 'Comms Status', 'Name', 'Email', 'Phone', 'Degrees', 'Security+', 'Security Clearance', 'Certifications', 'Parse Mode'];
     const rows = [headers];
     results.forEach(r => {
-        rows.push([r.status || statusOptions[0], r.name || '', r.email || '', r.phone || '',
+        rows.push([r.status || statusOptions[0], r.commsStatus || commsOptions[0], r.name || '', r.email || '', r.phone || '',
             r.degrees || '', r.securityPlus || 'No', r.clearance || '', r.certifications || '', r.parseMode || '']);
     });
     let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -694,70 +704,79 @@ function openSettingsModal() {
     document.getElementById('settingsModalOverlay').classList.add('show');
     document.getElementById('apiKeyInput').value = localStorage.getItem('resumeparser_apikey') || '';
     renderStatusOptionsList();
+    renderCommsOptionsList();
 }
 
 function closeSettingsModal() {
     document.getElementById('settingsModalOverlay').classList.remove('show');
 }
 
-function renderStatusOptionsList() {
-    const list = document.getElementById('statusOptionsList');
-    list.innerHTML = statusOptions.map((opt, i) => `
+// Generic options list editor
+function renderOptionsList(listId, options, type) {
+    const list = document.getElementById(listId);
+    list.innerHTML = options.map((opt, i) => `
         <div class="status-option-item" draggable="true" data-idx="${i}"
-             ondragstart="statusDragStart(event, ${i})" ondragover="statusDragOver(event)" ondrop="statusDrop(event, ${i})" ondragend="statusDragEnd(event)">
+             ondragstart="optDragStart(event, ${i}, '${type}')" ondragover="event.preventDefault()" ondrop="optDrop(event, ${i}, '${type}')" ondragend="optDragEnd(event)">
             <span class="status-drag-handle">&#9776;</span>
-            <input type="text" value="${escapeHtml(opt)}" onchange="renameStatusOption(${i}, this.value)">
-            <button class="btn-icon" onclick="removeStatusOption(${i})" title="Remove">&times;</button>
+            <input type="text" value="${escapeHtml(opt)}" onchange="renameOpt(${i}, this.value, '${type}')">
+            <button class="btn-icon" onclick="removeOpt(${i}, '${type}')" title="Remove">&times;</button>
         </div>
     `).join('');
 }
 
-let statusDragIdx = null;
-function statusDragStart(e, idx) { statusDragIdx = idx; e.dataTransfer.effectAllowed = 'move'; e.target.style.opacity = '0.4'; }
-function statusDragOver(e) { e.preventDefault(); }
-function statusDrop(e, targetIdx) {
+function renderStatusOptionsList() { renderOptionsList('statusOptionsList', statusOptions, 'status'); }
+function renderCommsOptionsList() { renderOptionsList('commsOptionsList', commsOptions, 'comms'); }
+
+let optDragIdx = null; let optDragType = null;
+function optDragStart(e, idx, type) { optDragIdx = idx; optDragType = type; e.dataTransfer.effectAllowed = 'move'; e.target.style.opacity = '0.4'; }
+function optDragEnd(e) { e.target.style.opacity = ''; optDragIdx = null; optDragType = null; }
+function optDrop(e, targetIdx, type) {
     e.preventDefault();
-    if (statusDragIdx === null || statusDragIdx === targetIdx) return;
-    const [moved] = statusOptions.splice(statusDragIdx, 1);
-    statusOptions.splice(targetIdx, 0, moved);
-    statusDragIdx = null;
-    saveStatusOptions();
-    renderStatusOptionsList();
+    if (optDragIdx === null || optDragType !== type || optDragIdx === targetIdx) return;
+    const arr = type === 'status' ? statusOptions : commsOptions;
+    const [moved] = arr.splice(optDragIdx, 1);
+    arr.splice(targetIdx, 0, moved);
+    optDragIdx = null;
+    saveAllOptions();
+    if (type === 'status') renderStatusOptionsList(); else renderCommsOptionsList();
 }
-function statusDragEnd(e) { e.target.style.opacity = ''; statusDragIdx = null; }
 
 function addStatusOption() {
     const input = document.getElementById('newStatusInput');
     const val = input.value.trim();
-    if (!val) return;
-    if (statusOptions.some(s => s.toLowerCase() === val.toLowerCase())) { input.value = ''; return; }
-    statusOptions.push(val);
-    input.value = '';
-    saveStatusOptions();
-    renderStatusOptionsList();
+    if (!val || statusOptions.some(s => s.toLowerCase() === val.toLowerCase())) { input.value = ''; return; }
+    statusOptions.push(val); input.value = '';
+    saveAllOptions(); renderStatusOptionsList();
 }
 
-function removeStatusOption(idx) {
-    if (statusOptions.length <= 1) return;
-    statusOptions.splice(idx, 1);
-    saveStatusOptions();
-    renderStatusOptionsList();
+function addCommsOption() {
+    const input = document.getElementById('newCommsInput');
+    const val = input.value.trim();
+    if (!val || commsOptions.some(s => s.toLowerCase() === val.toLowerCase())) { input.value = ''; return; }
+    commsOptions.push(val); input.value = '';
+    saveAllOptions(); renderCommsOptionsList();
 }
 
-function renameStatusOption(idx, val) {
-    val = val.trim();
-    if (!val) return;
-    const old = statusOptions[idx];
-    statusOptions[idx] = val;
-    // Update any results that had the old value
-    results.forEach(r => { if (r.status === old) r.status = val; });
-    saveStatusOptions();
-    saveToFirebase();
-    renderTable();
+function removeOpt(idx, type) {
+    const arr = type === 'status' ? statusOptions : commsOptions;
+    if (arr.length <= 1) return;
+    arr.splice(idx, 1);
+    saveAllOptions();
+    if (type === 'status') renderStatusOptionsList(); else renderCommsOptionsList();
 }
 
-function saveStatusOptions() {
+function renameOpt(idx, val, type) {
+    val = val.trim(); if (!val) return;
+    const arr = type === 'status' ? statusOptions : commsOptions;
+    const field = type === 'status' ? 'status' : 'commsStatus';
+    const old = arr[idx]; arr[idx] = val;
+    results.forEach(r => { if (r[field] === old) r[field] = val; });
+    saveAllOptions(); saveToFirebase(); renderTable();
+}
+
+function saveAllOptions() {
     localStorage.setItem('resumeparser_statusoptions', JSON.stringify(statusOptions));
+    localStorage.setItem('resumeparser_commsoptions', JSON.stringify(commsOptions));
     renderTable();
 }
 
@@ -770,6 +789,7 @@ function saveSettings() {
 
 // ── Init ──
 try { const saved = JSON.parse(localStorage.getItem('resumeparser_statusoptions')); if (saved && saved.length) statusOptions = saved; } catch(e) {}
+try { const saved = JSON.parse(localStorage.getItem('resumeparser_commsoptions')); if (saved && saved.length) commsOptions = saved; } catch(e) {}
 
 if (typeof firebase !== 'undefined') {
     initFirebase();
