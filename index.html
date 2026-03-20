@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Parser</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+</head>
+<body>
+
+<!-- Sign In Screen -->
+<div id="signInScreen">
+    <div class="sign-in-box" id="signInBox"></div>
+</div>
+
+<!-- Main App -->
+<div id="app" style="display:none;">
+    <!-- Toolbar -->
+    <div id="toolbar">
+        <span id="appTitle">Resume Parser</span>
+        <div class="toolbar-spacer"></div>
+        <label class="toolbar-btn-file">
+            Upload PDFs
+            <input type="file" id="fileInput" accept=".pdf" multiple style="display:none">
+        </label>
+        <div id="parseModeToggle">
+            <button id="btnBasicMode" class="active" onclick="setParseMode('basic')">Basic</button>
+            <button id="btnAiMode" onclick="setParseMode('ai')">AI (Claude)</button>
+        </div>
+        <button id="btnParse" onclick="parseAll()">Parse Resumes</button>
+        <button onclick="clearResults()">Clear</button>
+        <button onclick="exportCSV()">Export CSV</button>
+        <button onclick="openSettingsModal()">Settings</button>
+        <span id="syncStatus" class="sync-status"></span>
+        <button id="btnSignOut" onclick="firebaseSignOut()">Sign Out</button>
+    </div>
+
+    <!-- Progress Bar -->
+    <div id="progressBar" style="display:none;">
+        <div id="progressFill"></div>
+        <span id="progressText">0 / 0</span>
+    </div>
+
+    <!-- File List -->
+    <div id="fileListPanel" style="display:none;">
+        <div id="fileListHeader">
+            <span>Uploaded Files</span>
+            <span id="fileCount">0 files</span>
+        </div>
+        <div id="fileListBody"></div>
+    </div>
+
+    <!-- Results Table -->
+    <div id="viewContainer"></div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModalOverlay" class="modal-overlay" onclick="if(event.target===this)closeSettingsModal()">
+    <div class="modal-box settings-modal">
+        <h3>Settings</h3>
+        <label for="apiKeyInput">Claude API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
+        <p class="settings-note">Your API key is stored locally in your browser only. It is never sent to Firebase or any server other than the Anthropic API.</p>
+        <div class="modal-actions">
+            <div class="modal-actions-right">
+                <button class="btn-secondary" onclick="closeSettingsModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

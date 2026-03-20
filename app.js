@@ -1,0 +1,537 @@
+// ── Firebase Config ──
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDpOMSGLIZXm1o0GE13NAe6fctMWC-khRk",
+    authDomain: "my-notes-63ce0.firebaseapp.com",
+    databaseURL: "https://my-notes-63ce0-default-rtdb.firebaseio.com",
+    projectId: "my-notes-63ce0",
+    storageBucket: "my-notes-63ce0.firebasestorage.app",
+    messagingSenderId: "890920806003",
+    appId: "1:890920806003:web:d9bcb77be35a3a9f09ec06"
+};
+
+// ── State ──
+let results = [];
+let uploadedFiles = [];
+let parseMode = 'basic';
+let firebaseUser = null;
+let dataListener = null;
+let sortField = 'name';
+let sortDir = 'asc';
+
+// ── PDF.js Setup ──
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+
+// ── Utilities ──
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Firebase Helpers ──
+function userRef() {
+    return firebase.database().ref('users/' + firebaseUser.uid);
+}
+
+function saveToFirebase() {
+    if (!firebaseUser) return;
+    const statusEl = document.getElementById('syncStatus');
+    statusEl.textContent = 'Saving...';
+    userRef().update({
+        resumeparser_results: JSON.stringify(results),
+        resumeparser_lastModified: Date.now()
+    }).then(() => {
+        statusEl.textContent = 'Saved';
+        setTimeout(() => { if (statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 3000);
+    }).catch(e => {
+        console.warn('Save failed:', e);
+        statusEl.textContent = 'Save error';
+    });
+}
+
+function startDataListener() {
+    if (dataListener) return;
+    const statusEl = document.getElementById('syncStatus');
+    statusEl.textContent = 'Loading...';
+    dataListener = userRef().on('value', snap => {
+        const data = snap.val();
+        if (data) {
+            try { results = JSON.parse(data.resumeparser_results || '[]'); } catch (e) { results = []; }
+        } else {
+            results = [];
+        }
+        statusEl.textContent = '';
+        renderTable();
+    });
+}
+
+function stopDataListener() {
+    if (dataListener && firebaseUser) userRef().off('value', dataListener);
+    dataListener = null;
+}
+
+// ── Firebase Auth ──
+function initFirebase() {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.auth().onAuthStateChanged(user => {
+        if (user) {
+            firebaseUser = user;
+            document.getElementById('signInScreen').classList.remove('show');
+            document.getElementById('app').style.display = 'flex';
+            startDataListener();
+        } else {
+            stopDataListener();
+            firebaseUser = null;
+            results = [];
+            document.getElementById('app').style.display = 'none';
+            showSignInScreen();
+        }
+    });
+}
+
+function showSignInScreen() {
+    const screen = document.getElementById('signInScreen');
+    const box = document.getElementById('signInBox');
+    screen.classList.add('show');
+    box.innerHTML = `
+        <h2>Resume Parser</h2>
+        <p>Sign in to access your data</p>
+        <input type="email" id="authEmail" placeholder="Email" autofocus>
+        <input type="password" id="authPassword" placeholder="Password">
+        <div class="auth-error" id="authError"></div>
+        <button onclick="firebaseSignIn()">Sign In</button>
+        <button onclick="firebaseSignUp()" style="background:#5cb85c;border-color:#5cb85c;">Create Account</button>
+        <button class="auth-secondary" onclick="firebaseForgotPassword()">Forgot password?</button>
+    `;
+    setTimeout(() => { const el = document.getElementById('authEmail'); if (el) el.focus(); }, 50);
+    box.onkeydown = function(e) { if (e.key === 'Enter') firebaseSignIn(); };
+}
+
+async function firebaseSignIn() {
+    const email = document.getElementById('authEmail').value;
+    const pw = document.getElementById('authPassword').value;
+    const err = document.getElementById('authError');
+    if (!email || !pw) { err.textContent = 'Enter email and password'; return; }
+    err.textContent = 'Signing in...';
+    try { await firebase.auth().signInWithEmailAndPassword(email, pw); }
+    catch (e) { err.textContent = e.message.replace('Firebase: ', '').replace(/\(auth\/[^)]*\)\.?/, '').trim() || 'Sign-in failed'; }
+}
+
+async function firebaseSignUp() {
+    const email = document.getElementById('authEmail').value;
+    const pw = document.getElementById('authPassword').value;
+    const err = document.getElementById('authError');
+    if (!email) { err.textContent = 'Enter an email address'; return; }
+    if (!pw || pw.length < 6) { err.textContent = 'Password must be at least 6 characters'; return; }
+    err.textContent = 'Creating account...';
+    try { await firebase.auth().createUserWithEmailAndPassword(email, pw); }
+    catch (e) { err.textContent = e.message.replace('Firebase: ', '').replace(/\(auth\/[^)]*\)\.?/, '').trim() || 'Sign-up failed'; }
+}
+
+async function firebaseForgotPassword() {
+    const email = document.getElementById('authEmail').value;
+    const err = document.getElementById('authError');
+    if (!email) { err.textContent = 'Enter your email address first'; return; }
+    try {
+        await firebase.auth().sendPasswordResetEmail(email);
+        err.style.color = '#5cb85c';
+        err.textContent = 'Password reset email sent — check your inbox';
+        setTimeout(() => { err.style.color = ''; }, 5000);
+    } catch (e) { err.textContent = e.message.replace('Firebase: ', '').replace(/\(auth\/[^)]*\)\.?/, '').trim() || 'Could not send reset email'; }
+}
+
+function firebaseSignOut() {
+    if (!confirm('Sign out?')) return;
+    stopDataListener();
+    firebase.auth().signOut();
+}
+
+// ── PDF Text Extraction ──
+async function extractTextFromPDF(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n';
+    }
+    return fullText;
+}
+
+// ── Basic / Regex Parser ──
+function parseBasic(text, fileName) {
+    return {
+        id: generateId(),
+        fileName,
+        name: extractName(text),
+        email: extractEmail(text),
+        phone: extractPhone(text),
+        education: extractEducation(text),
+        clearance: extractClearance(text),
+        certifications: extractCertifications(text),
+        parseMode: 'basic',
+        parsedAt: Date.now()
+    };
+}
+
+function extractName(text) {
+    // Strategy 1: Look for "Name:" label
+    const labelMatch = text.match(/(?:name|full\s*name)\s*[:\-]\s*([^\n,]{2,40})/i);
+    if (labelMatch) return labelMatch[1].trim();
+    // Strategy 2: First non-trivial line (most resumes start with the name)
+    const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 1);
+    for (const line of lines) {
+        const clean = line.replace(/[^a-zA-Z\s.\-']/g, '').trim();
+        if (clean.length >= 3 && clean.length <= 50 && clean.includes(' ')
+            && !/^(resume|curriculum|vitae|cv|page|profile|summary|objective|experience)/i.test(clean)) {
+            return clean;
+        }
+    }
+    return 'Not found';
+}
+
+function extractEmail(text) {
+    const match = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+    return match ? match[0] : 'Not found';
+}
+
+function extractPhone(text) {
+    const match = text.match(/(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}/);
+    return match ? match[0] : 'Not found';
+}
+
+function extractEducation(text) {
+    const degrees = text.match(/(?:Bachelor|Master|Ph\.?D|B\.?S\.?|B\.?A\.?|M\.?S\.?|M\.?A\.?|MBA|Associate|Doctorate|GED|High\s+School\s+Diploma)[^.\n;]{0,120}/gi);
+    if (degrees && degrees.length > 0) {
+        return [...new Set(degrees.map(d => d.trim()))].join('; ');
+    }
+    return 'Not found';
+}
+
+function extractClearance(text) {
+    const matches = text.match(/(?:Top\s+Secret(?:\s*\/\s*SCI)?|TS\s*\/\s*SCI|Secret|Confidential|Public\s+Trust|Q\s+Clearance|L\s+Clearance)(?:\s+Clearance)?/gi);
+    if (matches && matches.length > 0) {
+        return [...new Set(matches.map(m => m.trim()))].join('; ');
+    }
+    // Check for labeled patterns
+    const labeled = text.match(/(?:security\s+)?clearance\s*[:\-]\s*([^\n]{2,50})/i);
+    if (labeled) return labeled[1].trim();
+    return 'None found';
+}
+
+function extractCertifications(text) {
+    const certPatterns = /(?:PMP|CISSP|CISM|CISA|CompTIA\s+\w+|AWS\s+(?:Certified\s+)?\w+|Azure\s+\w+|CCNA|CCNP|CCIE|CEH|ITIL|CPA|PE|Six\s+Sigma|OSCP|Security\+|Network\+|A\+|Cloud\+|CASP\+?|GIAC\s+\w+|Certified\s+\w+\s+\w+|SAFe\s+\w+|Scrum\s+Master|CSM|TOGAF|RHCE|MCSE|MCSA|VCP)/gi;
+    const matches = text.match(certPatterns);
+    if (matches && matches.length > 0) {
+        return [...new Set(matches.map(m => m.trim()))].join('; ');
+    }
+    return 'None found';
+}
+
+// ── AI (Claude) Parser ──
+async function parseWithAI(text, fileName) {
+    const key = localStorage.getItem('resumeparser_apikey');
+    if (!key) {
+        alert('Set your Claude API key in Settings first.');
+        return null;
+    }
+
+    const prompt = `Extract the following fields from this resume text. Return ONLY a JSON object with these exact keys:
+{
+  "name": "Full Name",
+  "email": "email@example.com or Not found",
+  "phone": "phone number or Not found",
+  "education": "all degrees and schools, semicolon-separated, or Not found",
+  "clearance": "security clearance level (e.g. Top Secret/SCI, Secret, Public Trust) or None found",
+  "certifications": "all certifications, semicolon-separated, or None found"
+}
+
+Resume text:
+${text.substring(0, 15000)}`;
+
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': key,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1024,
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`API ${response.status}: ${errBody.substring(0, 200)}`);
+        }
+
+        const data = await response.json();
+        const content = data.content[0].text;
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON in response');
+        const parsed = JSON.parse(jsonMatch[0]);
+
+        return {
+            id: generateId(),
+            fileName,
+            name: parsed.name || 'Not found',
+            email: parsed.email || 'Not found',
+            phone: parsed.phone || 'Not found',
+            education: parsed.education || 'Not found',
+            clearance: parsed.clearance || 'None found',
+            certifications: parsed.certifications || 'None found',
+            parseMode: 'ai',
+            parsedAt: Date.now()
+        };
+    } catch (e) {
+        console.error('AI parse error:', e);
+        return {
+            id: generateId(),
+            fileName,
+            name: 'ERROR: ' + e.message,
+            email: '', phone: '', education: '', clearance: '', certifications: '',
+            parseMode: 'ai-error',
+            parsedAt: Date.now()
+        };
+    }
+}
+
+// ── File Upload ──
+document.getElementById('fileInput').addEventListener('change', function(e) {
+    uploadedFiles = Array.from(e.target.files);
+    renderFileList();
+});
+
+function renderFileList() {
+    const panel = document.getElementById('fileListPanel');
+    const body = document.getElementById('fileListBody');
+    const count = document.getElementById('fileCount');
+
+    if (uploadedFiles.length === 0) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    panel.style.display = '';
+    count.textContent = uploadedFiles.length + ' file' + (uploadedFiles.length !== 1 ? 's' : '');
+    body.innerHTML = uploadedFiles.map((f, i) => {
+        const size = f.size < 1024 * 1024
+            ? (f.size / 1024).toFixed(1) + ' KB'
+            : (f.size / (1024 * 1024)).toFixed(1) + ' MB';
+        return `<div class="file-item">
+            <span>${escapeHtml(f.name)}</span>
+            <span class="file-size">${size}</span>
+            <button class="file-remove" onclick="removeFile(${i})" title="Remove">&times;</button>
+        </div>`;
+    }).join('');
+}
+
+function removeFile(index) {
+    uploadedFiles.splice(index, 1);
+    renderFileList();
+}
+
+// ── Parse Orchestration ──
+async function parseAll() {
+    if (uploadedFiles.length === 0) {
+        alert('Upload PDF files first.');
+        return;
+    }
+
+    const total = uploadedFiles.length;
+    showProgress(0, total);
+
+    for (let i = 0; i < total; i++) {
+        const file = uploadedFiles[i];
+        updateProgress(i, total, file.name);
+
+        try {
+            const text = await extractTextFromPDF(file);
+
+            if (text.trim().length < 50) {
+                results.push({
+                    id: generateId(), fileName: file.name,
+                    name: 'WARNING: PDF may be scanned/image-only',
+                    email: '', phone: '', education: '', clearance: '', certifications: '',
+                    parseMode: parseMode + '-error', parsedAt: Date.now()
+                });
+            } else {
+                let result;
+                if (parseMode === 'ai') {
+                    result = await parseWithAI(text, file.name);
+                    if (!result) { hideProgress(); return; }
+                } else {
+                    result = parseBasic(text, file.name);
+                }
+                results.push(result);
+            }
+        } catch (e) {
+            console.error('Error parsing ' + file.name, e);
+            results.push({
+                id: generateId(), fileName: file.name,
+                name: 'ERROR: ' + e.message,
+                email: '', phone: '', education: '', clearance: '', certifications: '',
+                parseMode: parseMode + '-error', parsedAt: Date.now()
+            });
+        }
+
+        renderTable();
+    }
+
+    hideProgress();
+    saveToFirebase();
+    uploadedFiles = [];
+    document.getElementById('fileInput').value = '';
+    renderFileList();
+}
+
+// ── Progress Bar ──
+function showProgress(current, total) {
+    const bar = document.getElementById('progressBar');
+    bar.style.display = '';
+    updateProgress(current, total, '');
+}
+
+function updateProgress(current, total, fileName) {
+    const pct = total > 0 ? ((current + 1) / total) * 100 : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressText').textContent = `${current + 1} / ${total}` + (fileName ? ` — ${fileName}` : '');
+}
+
+function hideProgress() {
+    document.getElementById('progressBar').style.display = 'none';
+}
+
+// ── Table Rendering ──
+function renderTable() {
+    const container = document.getElementById('viewContainer');
+    const sorted = getSortedResults();
+
+    let html = '<div class="results-table-wrapper"><table class="results-table">';
+    html += '<thead><tr>';
+    html += buildSortHeader('File', 'fileName');
+    html += buildSortHeader('Name', 'name');
+    html += buildSortHeader('Email', 'email');
+    html += buildSortHeader('Phone', 'phone');
+    html += buildSortHeader('Education', 'education');
+    html += buildSortHeader('Clearance', 'clearance');
+    html += buildSortHeader('Certifications', 'certifications');
+    html += '<th>Mode</th><th></th>';
+    html += '</tr></thead><tbody>';
+
+    if (sorted.length === 0) {
+        html += '<tr class="empty-row"><td colspan="9">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
+    } else {
+        sorted.forEach(r => {
+            const modeClass = 'mode-' + (r.parseMode || 'basic');
+            html += '<tr>';
+            html += `<td class="cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</td>`;
+            html += `<td>${escapeHtml(r.name)}</td>`;
+            html += `<td class="cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></td>`;
+            html += `<td>${escapeHtml(r.phone)}</td>`;
+            html += `<td class="cell-wrap">${escapeHtml(r.education)}</td>`;
+            html += `<td>${escapeHtml(r.clearance)}</td>`;
+            html += `<td class="cell-wrap">${escapeHtml(r.certifications)}</td>`;
+            html += `<td><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></td>`;
+            html += `<td><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></td>`;
+            html += '</tr>';
+        });
+    }
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function buildSortHeader(label, field) {
+    const isActive = sortField === field;
+    const arrow = isActive ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '\u25B2';
+    const cls = isActive ? 'active' : '';
+    return `<th onclick="toggleSort('${field}')">${label} <span class="sort-arrow ${cls}">${arrow}</span></th>`;
+}
+
+function toggleSort(field) {
+    if (sortField === field) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    else { sortField = field; sortDir = 'asc'; }
+    renderTable();
+}
+
+function getSortedResults() {
+    const sorted = [...results];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    sorted.sort((a, b) => {
+        const va = (a[sortField] || '').toLowerCase();
+        const vb = (b[sortField] || '').toLowerCase();
+        if (va < vb) return -1 * dir;
+        if (va > vb) return 1 * dir;
+        return 0;
+    });
+    return sorted;
+}
+
+// ── Actions ──
+function deleteResult(id) {
+    results = results.filter(r => r.id !== id);
+    renderTable();
+    saveToFirebase();
+}
+
+function clearResults() {
+    if (results.length === 0) return;
+    if (!confirm('Clear all parsed results?')) return;
+    results = [];
+    renderTable();
+    saveToFirebase();
+}
+
+function setParseMode(mode) {
+    parseMode = mode;
+    document.getElementById('btnBasicMode').classList.toggle('active', mode === 'basic');
+    document.getElementById('btnAiMode').classList.toggle('active', mode === 'ai');
+}
+
+// ── CSV Export ──
+function exportCSV() {
+    if (results.length === 0) { alert('No results to export.'); return; }
+    const headers = ['File', 'Name', 'Email', 'Phone', 'Education', 'Security Clearance', 'Certifications', 'Parse Mode'];
+    const rows = [headers];
+    results.forEach(r => {
+        rows.push([r.fileName || '', r.name || '', r.email || '', r.phone || '',
+            r.education || '', r.clearance || '', r.certifications || '', r.parseMode || '']);
+    });
+    let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'parsed_resumes.csv'; a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ── Settings Modal ──
+function openSettingsModal() {
+    document.getElementById('settingsModalOverlay').classList.add('show');
+    document.getElementById('apiKeyInput').value = localStorage.getItem('resumeparser_apikey') || '';
+}
+
+function closeSettingsModal() {
+    document.getElementById('settingsModalOverlay').classList.remove('show');
+}
+
+function saveSettings() {
+    const key = document.getElementById('apiKeyInput').value.trim();
+    if (key) localStorage.setItem('resumeparser_apikey', key);
+    else localStorage.removeItem('resumeparser_apikey');
+    closeSettingsModal();
+}
+
+// ── Init ──
+initFirebase();
