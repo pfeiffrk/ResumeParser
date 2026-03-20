@@ -458,38 +458,33 @@ async function parseAll() {
         try {
             const blobUrl = URL.createObjectURL(file);
             const text = await extractTextFromPDF(file);
-            // Upload PDF to Firebase Storage
-            let pdfUrl = '';
-            if (typeof firebase !== 'undefined' && firebase.storage) {
-                try {
-                    const storageRef = firebase.storage().ref(`users/${firebaseUser.uid}/resumes/${file.name}`);
-                    await storageRef.put(file);
-                    pdfUrl = await storageRef.getDownloadURL();
-                } catch (uploadErr) {
-                    console.warn('Storage upload failed:', uploadErr);
-                }
-            }
-
+            let result;
             if (text.trim().length < 50) {
-                const id = generateId();
-                pdfBlobUrls[id] = blobUrl;
-                results.push({
-                    id, fileName: file.name, pdfUrl,
+                result = {
+                    id: generateId(), fileName: file.name, pdfUrl: '',
                     name: 'WARNING: PDF may be scanned/image-only',
                     email: '', phone: '', education: '', clearance: '', certifications: '',
                     parseMode: parseMode + '-error', parsedAt: Date.now()
-                });
+                };
+            } else if (parseMode === 'ai') {
+                result = await parseWithAI(text, file.name);
+                if (!result) { hideProgress(); return; }
             } else {
-                let result;
-                if (parseMode === 'ai') {
-                    result = await parseWithAI(text, file.name);
-                    if (!result) { hideProgress(); return; }
-                } else {
-                    result = parseBasic(text, file.name);
-                }
-                result.pdfUrl = pdfUrl;
-                pdfBlobUrls[result.id] = blobUrl;
-                results.push(result);
+                result = parseBasic(text, file.name);
+            }
+            result.pdfUrl = '';
+            pdfBlobUrls[result.id] = blobUrl;
+            results.push(result);
+
+            // Upload PDF to Firebase Storage in background (don't block)
+            if (typeof firebase !== 'undefined' && firebase.storage) {
+                const resultId = result.id;
+                firebase.storage().ref(`users/${firebaseUser.uid}/resumes/${file.name}`)
+                    .put(file).then(snap => snap.ref.getDownloadURL())
+                    .then(url => {
+                        const r = results.find(x => x.id === resultId);
+                        if (r) { r.pdfUrl = url; saveToFirebase(); }
+                    }).catch(err => console.warn('Storage upload failed:', err));
             }
         } catch (e) {
             console.error('Error parsing ' + file.name, e);
