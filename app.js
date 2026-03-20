@@ -388,7 +388,13 @@ ${text.substring(0, 15000)}`;
 // ── File Upload ──
 document.getElementById('fileInput').addEventListener('change', function(e) {
     uploadedFiles = Array.from(e.target.files);
-    if (uploadedFiles.length > 0) parseAll();
+    if (uploadedFiles.length > 0) {
+        parseAll().catch(err => {
+            console.error('Parse error:', err);
+            alert('Error during parsing: ' + err.message);
+            hideProgress();
+        });
+    }
 });
 
 function renderFileList() {
@@ -454,12 +460,14 @@ async function parseAll() {
             const text = await extractTextFromPDF(file);
             // Upload PDF to Firebase Storage
             let pdfUrl = '';
-            try {
-                const storageRef = firebase.storage().ref(`users/${firebaseUser.uid}/resumes/${file.name}`);
-                await storageRef.put(file);
-                pdfUrl = await storageRef.getDownloadURL();
-            } catch (uploadErr) {
-                console.warn('Storage upload failed:', uploadErr);
+            if (typeof firebase !== 'undefined' && firebase.storage) {
+                try {
+                    const storageRef = firebase.storage().ref(`users/${firebaseUser.uid}/resumes/${file.name}`);
+                    await storageRef.put(file);
+                    pdfUrl = await storageRef.getDownloadURL();
+                } catch (uploadErr) {
+                    console.warn('Storage upload failed:', uploadErr);
+                }
             }
 
             if (text.trim().length < 50) {
