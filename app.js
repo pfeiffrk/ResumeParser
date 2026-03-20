@@ -248,12 +248,27 @@ function extractPhone(text) {
 }
 
 function extractDegrees(text) {
-    const degreePatterns = /(?:Bachelor(?:'s)?(?:\s+of\s+\w+)?|Master(?:'s)?(?:\s+of\s+\w+)?|Ph\.?D\.?|Doctorate|B\.?S\.?|B\.?A\.?|M\.?S\.?|M\.?A\.?|MBA|M\.?B\.?A\.?|Associate(?:'s)?|GED|High\s+School\s+Diploma|B\.?Sc\.?|M\.?Sc\.?|J\.?D\.?|M\.?D\.?|Ed\.?D\.?|D\.?B\.?A\.?)/gi;
-    const matches = text.match(degreePatterns);
-    if (matches && matches.length > 0) {
-        return [...new Set(matches.map(d => d.trim()))].join('; ');
+    const t = text.toLowerCase();
+    const found = [];
+
+    // PhD / Doctorate
+    if (/ph\.?d|doctorate|doctor\s+of|d\.?b\.?a|ed\.?d/i.test(text)) {
+        found.push('PhD');
     }
-    return 'None found';
+    // Masters
+    if (/master(?:'?s)?|m\.?s\.?\b|m\.?a\.?\b|m\.?b\.?a\.?\b|mba|m\.?sc\.?|m\.?eng|m\.?ed/i.test(text)) {
+        found.push('Masters');
+    }
+    // Bachelors
+    if (/bachelor(?:'?s)?|b\.?s\.?\b|b\.?a\.?\b|b\.?sc\.?|b\.?eng|b\.?b\.?a/i.test(text)) {
+        found.push('Bachelors');
+    }
+    // Associates
+    if (/associate(?:'?s)?\s+(?:degree|of|in)/i.test(text) || /\ba\.?a\.?\b|\ba\.?s\.?\b/i.test(text)) {
+        found.push('Associates');
+    }
+
+    return found.length > 0 ? found.join('; ') : 'None';
 }
 
 function extractEducation(text) {
@@ -297,7 +312,7 @@ async function parseWithAI(text, fileName) {
   "name": "Full Name",
   "email": "email@example.com or Not found",
   "phone": "phone number or Not found",
-  "degrees": "degree types only (e.g. B.S., MBA, Ph.D), semicolon-separated, or None found",
+  "degrees": "highest degree level(s) as: PhD, Masters, Bachelors, Associates, or None — semicolon-separated if multiple",
   "education": "full education details with schools and fields of study, semicolon-separated, or Not found",
   "clearance": "security clearance level (e.g. Top Secret/SCI, Secret, Public Trust) or None found",
   "certifications": "all certifications, semicolon-separated, or None found"
