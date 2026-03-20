@@ -137,10 +137,18 @@ body {
 .results-table th .sort-arrow { font-size: 10px; margin-left: 4px; color: #aaa; }
 .results-table th .sort-arrow.active { color: var(--primary); }
 .results-table td {
-    padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #eee; vertical-align: top;
+    padding: 0; font-size: 13px; border-bottom: 1px solid #eee; vertical-align: top;
 }
-.results-table tr { transition: background 0.15s; }
+.results-table tbody tr { transition: background 0.15s; }
 .results-table tbody tr:hover { background: #f7f8fc; }
+.cell-inner {
+    padding: 8px 12px; max-height: 40px; overflow: hidden; line-height: 1.5;
+}
+.row-resizer-tr td { padding: 0 !important; border: none !important; }
+.row-resizer {
+    height: 4px; cursor: ns-resize; background: transparent;
+}
+.row-resizer:hover { background: rgba(74,144,217,0.3); }
 .results-table .empty-row td {
     text-align: center; color: var(--text-light); padding: 40px; font-size: 14px;
 }

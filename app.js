@@ -434,24 +434,54 @@ function renderTable() {
     if (sorted.length === 0) {
         html += '<tr class="empty-row"><td colspan="9">No results yet. Upload PDFs and click "Parse Resumes".</td></tr>';
     } else {
-        sorted.forEach(r => {
+        sorted.forEach((r, idx) => {
             const modeClass = 'mode-' + (r.parseMode || 'basic');
-            html += '<tr>';
-            html += `<td class="cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</td>`;
-            html += `<td>${escapeHtml(r.name)}</td>`;
-            html += `<td class="cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></td>`;
-            html += `<td>${escapeHtml(r.phone)}</td>`;
-            html += `<td class="cell-wrap">${escapeHtml(r.education)}</td>`;
-            html += `<td>${escapeHtml(r.clearance)}</td>`;
-            html += `<td class="cell-wrap">${escapeHtml(r.certifications)}</td>`;
-            html += `<td><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></td>`;
-            html += `<td><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></td>`;
+            html += `<tr data-row="${idx}">`;
+            html += `<td><div class="cell-inner cell-filename" title="${escapeHtml(r.fileName)}">${escapeHtml(r.fileName)}</div></td>`;
+            html += `<td><div class="cell-inner">${escapeHtml(r.name)}</div></td>`;
+            html += `<td><div class="cell-inner cell-email"><a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a></div></td>`;
+            html += `<td><div class="cell-inner">${escapeHtml(r.phone)}</div></td>`;
+            html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.education)}</div></td>`;
+            html += `<td><div class="cell-inner">${escapeHtml(r.clearance)}</div></td>`;
+            html += `<td><div class="cell-inner cell-wrap">${escapeHtml(r.certifications)}</div></td>`;
+            html += `<td><div class="cell-inner"><span class="mode-badge ${modeClass}">${escapeHtml(r.parseMode)}</span></div></td>`;
+            html += `<td><div class="cell-inner"><button class="btn-icon" onclick="deleteResult('${r.id}')" title="Remove">&#10005;</button></div></td>`;
             html += '</tr>';
+            html += `<tr class="row-resizer-tr" data-resize-row="${idx}"><td colspan="9"><div class="row-resizer"></div></td></tr>`;
         });
     }
 
     html += '</tbody></table></div>';
     container.innerHTML = html;
+    initRowResizers();
+}
+
+function initRowResizers() {
+    document.querySelectorAll('.row-resizer').forEach(handle => {
+        handle.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            const resizerTr = handle.closest('tr');
+            const rowIdx = resizerTr.dataset.resizeRow;
+            const dataRow = document.querySelector(`tr[data-row="${rowIdx}"]`);
+            if (!dataRow) return;
+            const cells = dataRow.querySelectorAll('.cell-inner');
+            const startY = e.clientY;
+            const startHeights = [...cells].map(c => c.offsetHeight);
+            const maxH = Math.max(...startHeights);
+
+            function onMove(ev) {
+                const dy = ev.clientY - startY;
+                const newH = Math.max(20, maxH + dy);
+                cells.forEach(c => { c.style.maxHeight = newH + 'px'; });
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    });
 }
 
 function buildSortHeader(label, field) {
