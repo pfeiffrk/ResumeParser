@@ -908,18 +908,19 @@ function parseIndeedPaste() {
         if (rejectDupes.has(block.name.toLowerCase())) return;
 
         const allText = block.lines.join('\n');
+        const jobs = extractIndeedJobs(block.lines);
         const r = {
             id: generateId(),
             name: block.name,
             location: extractIndeedField(block.lines, 0) || '',
-            workExperience: extractIndeedSection(block.lines, 'Relevant Work Experience'),
+            currentTitle: jobs.length > 0 ? jobs[0].title : '',
+            currentEmployer: jobs.length > 0 ? jobs[0].employer : '',
+            previousTitle: jobs.length > 1 ? jobs[1].title : '',
+            previousEmployer: jobs.length > 1 ? jobs[1].employer : '',
             education: extractIndeedSection(block.lines, 'Education'),
             certifications: extractIndeedSection(block.lines, 'Licenses and certifications'),
-            securityPlus: /security\s*\+|sec\+/i.test(allText) ? 'Yes' : 'No',
-            clearance: extractClearance(allText),
             lastUpdated: extractIndeedMeta(block.lines, 'Recently updated'),
             lastActive: extractIndeedMeta(block.lines, 'Active'),
-            contacted: extractIndeedMeta(block.lines, 'Contacted'),
             status: statusOptions[0],
             commsStatus: commsOptions[0],
             parsedAt: Date.now()
@@ -962,6 +963,30 @@ function extractIndeedSection(lines, header) {
     return items.join('; ').replace(/\s*;\s*;/g, ';').trim() || 'None';
 }
 
+function extractIndeedJobs(lines) {
+    const jobs = [];
+    let inWork = false;
+    let i = 0;
+    while (i < lines.length) {
+        const line = lines[i];
+        if (/^Relevant Work Experience$/i.test(line)) { inWork = true; i++; continue; }
+        if (inWork) {
+            if (/^(Education|Licenses and cert|Recently updated|Active|Contacted)/i.test(line)) break;
+            // Job title line, followed by employer line with parentheses or comma+year
+            const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+            if (line && nextLine && /\d{4}/.test(nextLine)) {
+                // nextLine is like "(Company), 2023 - 2024" or "Company, 2023 - Present"
+                const employer = nextLine.replace(/^\(/, '').replace(/\)/, '').replace(/,?\s*\d{4}\s*-\s*(Present|\d{4})$/i, '').trim();
+                jobs.push({ title: line, employer: employer });
+                i += 2;
+                continue;
+            }
+        }
+        i++;
+    }
+    return jobs;
+}
+
 function extractIndeedMeta(lines, prefix) {
     for (const line of lines) {
         if (line.toLowerCase().startsWith(prefix.toLowerCase())) return line;
@@ -974,9 +999,10 @@ function renderIndeedTable() {
     let html = '<table class="results-table">';
     html += '<thead><tr>';
     html += '<th>Review Status</th><th>Comms Status</th>';
-    html += '<th>Name</th><th>Location</th><th>Work Experience</th><th>Education</th>';
-    html += '<th>Sec+</th><th>Clearance</th><th>Certifications</th>';
-    html += '<th>Last Updated</th><th>Last Active</th><th>Contacted</th><th></th>';
+    html += '<th>Name</th><th>Location</th><th>Current Title</th><th>Current Employer</th>';
+    html += '<th>Previous Title</th><th>Previous Employer</th>';
+    html += '<th>Education</th><th>Certifications</th>';
+    html += '<th>Last Updated</th><th>Last Active</th><th></th>';
     html += '</tr></thead><tbody>';
     if (indeedResults.length === 0) {
         html += '<tr class="empty-row"><td colspan="13">No results yet. Click "Paste from Indeed" to get started.</td></tr>';
@@ -989,14 +1015,14 @@ function renderIndeedTable() {
             html += `<td><select class="status-select" onchange="updateIndeedField('${r.id}','commsStatus',this.value)">${commsOpts}</select></td>`;
             html += `<td><strong>${escapeHtml(r.name)}</strong></td>`;
             html += `<td>${escapeHtml(r.location)}</td>`;
-            html += `<td class="cell-wrap">${escapeHtml(r.workExperience)}</td>`;
+            html += `<td>${escapeHtml(r.currentTitle)}</td>`;
+            html += `<td>${escapeHtml(r.currentEmployer)}</td>`;
+            html += `<td>${escapeHtml(r.previousTitle)}</td>`;
+            html += `<td>${escapeHtml(r.previousEmployer)}</td>`;
             html += `<td class="cell-wrap">${escapeHtml(r.education)}</td>`;
-            html += `<td>${r.securityPlus === 'Yes' ? '<span style="color:var(--success);font-weight:600;">Yes</span>' : 'No'}</td>`;
-            html += `<td>${escapeHtml(r.clearance)}</td>`;
             html += `<td class="cell-wrap">${escapeHtml(r.certifications)}</td>`;
             html += `<td style="font-size:11px;">${escapeHtml(r.lastUpdated)}</td>`;
             html += `<td style="font-size:11px;">${escapeHtml(r.lastActive)}</td>`;
-            html += `<td style="font-size:11px;">${escapeHtml(r.contacted)}</td>`;
             html += `<td><button class="btn-icon" onclick="deleteIndeedResult('${r.id}')" title="Remove">&#10005;</button></td>`;
             html += '</tr>';
         });
@@ -1040,12 +1066,12 @@ function saveIndeedToFirebase() {
 
 function exportIndeedCSV() {
     if (indeedResults.length === 0) { alert('No results to export.'); return; }
-    const headers = ['Review Status', 'Comms Status', 'Name', 'Location', 'Work Experience', 'Education', 'Security+', 'Clearance', 'Certifications', 'Last Updated', 'Last Active', 'Contacted'];
+    const headers = ['Review Status', 'Comms Status', 'Name', 'Location', 'Current Title', 'Current Employer', 'Previous Title', 'Previous Employer', 'Education', 'Certifications', 'Last Updated', 'Last Active'];
     const rows = [headers];
     indeedResults.forEach(r => {
-        rows.push([r.status || '', r.commsStatus || '', r.name || '', r.location || '', r.workExperience || '',
-            r.education || '', r.securityPlus || 'No', r.clearance || '', r.certifications || '',
-            r.lastUpdated || '', r.lastActive || '', r.contacted || '']);
+        rows.push([r.status || '', r.commsStatus || '', r.name || '', r.location || '',
+            r.currentTitle || '', r.currentEmployer || '', r.previousTitle || '', r.previousEmployer || '',
+            r.education || '', r.certifications || '', r.lastUpdated || '', r.lastActive || '']);
     });
     let csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
