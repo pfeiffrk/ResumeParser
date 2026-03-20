@@ -437,14 +437,15 @@ async function parseAll() {
     let filesToParse = uploadedFiles;
     if (rejectDupes) {
         const existing = new Set(results.map(r => r.fileName));
-        filesToParse = filesToParse.filter(f => !existing.has(f.name));
+        const seen = new Set();
+        filesToParse = filesToParse.filter(f => {
+            if (existing.has(f.name) || seen.has(f.name)) return false;
+            seen.add(f.name);
+            return true;
+        });
         if (filesToParse.length === 0) {
             alert('All selected files have already been parsed.');
             return;
-        }
-        if (filesToParse.length < uploadedFiles.length) {
-            const skipped = uploadedFiles.length - filesToParse.length;
-            console.log(`Skipped ${skipped} duplicate(s).`);
         }
     }
 
