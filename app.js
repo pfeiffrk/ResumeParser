@@ -19,7 +19,9 @@ let sortField = 'name';
 let sortDir = 'asc';
 
 // ── PDF.js Setup ──
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+}
 
 // ── Utilities ──
 function generateId() {
@@ -534,4 +536,14 @@ function saveSettings() {
 }
 
 // ── Init ──
-initFirebase();
+if (typeof firebase !== 'undefined') {
+    initFirebase();
+} else {
+    // Firebase failed to load (e.g. file:// protocol or offline)
+    document.getElementById('signInScreen').classList.add('show');
+    document.getElementById('signInBox').innerHTML = `
+        <h2>Resume Parser</h2>
+        <p style="color:#c44;">Firebase failed to load. Please serve this app from a local HTTP server instead of opening the file directly.</p>
+        <p style="font-size:12px;color:#888;margin-top:12px;">Run: <code>python -m http.server 8000</code> in the ResumeParser folder, then open <code>http://localhost:8000</code></p>
+    `;
+}
